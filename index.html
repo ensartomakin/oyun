@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kafa Topu 3D — Faz 2</title>
+  <title>Kafa Topu 3D — Faz 3</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #0b1a2e; font-family: 'Segoe UI', sans-serif; }
@@ -75,7 +75,7 @@
   position:fixed; top:62px; right:12px; font:bold 11px monospace;
   color:#ffee44; background:rgba(0,0,0,0.7); padding:3px 8px;
   border-radius:4px; z-index:60; pointer-events:none;
-">v2.8</div>
+">Faz 3</div>
 
 <!-- Canlı debug paneli -->
 <div id="dbg" style="
@@ -895,35 +895,75 @@ function updateHuman(p, dt) {
   else                                       p.vz *= Math.pow(0.001, dt);
 }
 
-// ── YAPAY ZEKA — 1v1 ─────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+//  FAZ 3 — GELİŞMİŞ YAPAY ZEKA
+// ════════════════════════════════════════════════════════════════════
 function updateAI(p, dt) {
   if (p.state === 'slide') return;
 
   const ownGoalX = p.team === 0 ? -FIELD_W / 2 : FIELD_W / 2;
-  // Kendi yarısındaysa biraz geri dur, karşı yarıda topa koş
-  const ballInOwn = (p.team === 0 ? ball.x < 0 : ball.x > 0);
-  const targetX   = ballInOwn
-    ? ball.x * 0.55 + ownGoalX * 0.45
-    : ball.x;
-  const targetZ   = ball.z * 0.50;
+  const oppGoalX = p.team === 0 ?  FIELD_W / 2 : -FIELD_W / 2;
 
-  const dx = targetX - p.x;
-  const dz = targetZ - p.z;
+  // ── Top yolu tahmini (0.28s ileri) ──────────────────────────────
+  const T     = 0.28;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const predX = clamp(ball.x + ball.vx * T, -FIELD_W/2+0.5, FIELD_W/2-0.5);
+  const predZ = clamp(ball.z + ball.vz * T, -FIELD_D/2+0.5, FIELD_D/2-0.5);
 
-  p.vx = Math.sign(dx) * Math.min(Math.abs(dx) * 3.0, PLAYER_SPD * 0.95);
-  p.vz = Math.sign(dz) * Math.min(Math.abs(dz) * 2.0, PLAYER_SPD * 0.50);
-  if (Math.abs(p.vx) > 0.4) p.faceLeft = p.vx < 0;
+  // ── Mod: savunma mı, hücum mu? ───────────────────────────────────
+  const danger = (p.team === 0 && ball.vx < -2.5 && ball.x < 1)
+              || (p.team === 1 && ball.vx >  2.5 && ball.x > -1);
 
-  // Zıpla
-  if (p.onGround) {
-    const d2 = Math.sqrt((ball.x - p.x) ** 2 + (ball.z - p.z) ** 2);
-    if (d2 < 2.5 && ball.y > 1.0) { p.vy = PLAYER_JUMP * 0.88; p.onGround = false; }
+  let targetX, targetZ;
+  if (danger) {
+    // Savunma: topun yolunu kes
+    targetX = predX * 0.45 + ownGoalX * 0.55;
+    targetZ = predZ * 0.45;
+  } else {
+    // Hücum: tahmin noktasına koş
+    targetX = predX;
+    targetZ = predZ * 0.55;
   }
 
-  // Vuruş
-  if (p.kickCooldown <= 0 && ballDist(p) < KICK_RANGE) {
-    if (ball.y > 1.1) doHeader(p);
-    else              doShot(p);
+  const spd = PLAYER_SPD * (danger ? 1.0 : 0.93);
+  const dx  = targetX - p.x;
+  const dz  = targetZ - p.z;
+  p.vx = Math.sign(dx) * Math.min(Math.abs(dx) * 3.5, spd);
+  p.vz = Math.sign(dz) * Math.min(Math.abs(dz) * 2.2, spd * 0.55);
+  if (Math.abs(p.vx) > 0.3) p.faceLeft = p.vx < 0;
+
+  // ── Zıplama ──────────────────────────────────────────────────────
+  if (p.onGround) {
+    const d2 = Math.sqrt((ball.x - p.x)**2 + (ball.z - p.z)**2);
+    if (d2 < 2.5 && ball.y > 0.8) { p.vy = PLAYER_JUMP * 0.88; p.onGround = false; }
+  }
+
+  if (p.kickCooldown > 0) return;
+
+  // ── Kayma taktiği: insan topla dribble yapıyorsa yakla ──────────
+  const human = players.find(t => t.isHuman);
+  if (human && p.onGround) {
+    const humanHasBall = ballDist(human) < KICK_RANGE * 1.3;
+    const aiClose      = Math.sqrt((p.x-human.x)**2 + (p.z-human.z)**2) < 2.0;
+    if (humanHasBall && aiClose && Math.random() < 0.022) {
+      p.faceLeft = human.x < p.x;
+      doSlide(p); return;
+    }
+  }
+
+  // ── Vuruş seçimi ─────────────────────────────────────────────────
+  const d          = ballDist(p);
+  const toGoal     = Math.abs(p.x - oppGoalX);
+
+  if (d < KICK_RANGE) {
+    if (!p.onGround && ball.y > 1.2) {
+      doHeader(p);                              // havada kafa
+    } else if (toGoal < 5 && p.onGround && ball.y < 1.0) {
+      Math.random() < 0.4 ? doBicycleKick(p) : doShot(p); // yakın: röveşata veya şut
+    } else if (toGoal < 10) {
+      doShot(p);                                // orta mesafe şut
+    }
+    // Uzak: dribble ile yaklaş, vuruş yapma
   }
 }
 

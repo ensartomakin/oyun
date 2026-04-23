@@ -1,150 +1,381 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Karakter Seçimi</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sihirbaz — 3D Karakter</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0d0d1a;
-      font-family: 'Segoe UI', sans-serif;
       overflow: hidden;
-      color: #fff;
+      background: linear-gradient(160deg, #8A9BAE 0%, #50606E 100%);
+      font-family: 'Segoe UI', sans-serif;
     }
-    #ui {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-end;
-      pointer-events: none;
-      z-index: 10;
+    #c { display: block; width: 100vw; height: 100vh; }
+    #label {
+      position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%);
+      text-align: center; color: rgba(255,255,255,0.85); pointer-events: none;
     }
-    #title {
-      position: fixed;
-      top: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 1.5rem;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: #fff;
-      text-shadow: 0 0 30px rgba(255,255,255,0.4);
-    }
-    #subtitle {
-      position: fixed;
-      top: 58px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.75rem;
-      letter-spacing: 0.2em;
-      color: rgba(255,255,255,0.4);
-      text-transform: uppercase;
-    }
-    #char-bar {
-      pointer-events: all;
-      display: flex;
-      gap: 16px;
-      padding: 20px 32px;
-      margin-bottom: 32px;
-      background: rgba(255,255,255,0.05);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 20px;
-    }
-    .char-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      transition: transform 0.2s;
-    }
-    .char-btn:hover { transform: translateY(-4px); }
-    .char-btn.active .char-icon {
-      border-color: #fff;
-      box-shadow: 0 0 20px rgba(255,255,255,0.5);
-    }
-    .char-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.6rem;
-      transition: all 0.2s;
-    }
-    .char-name {
-      font-size: 0.6rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.6);
-    }
-    #char-info {
-      position: fixed;
-      top: 90px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-    }
-    #char-info h2 {
-      font-size: 1.8rem;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-    }
-    #char-info p {
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.5);
-      letter-spacing: 0.1em;
-      margin-top: 4px;
-    }
-    #canvas-container { width: 100vw; height: 100vh; }
-    canvas { display: block; }
+    #label h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    #label p  { font-size: 0.68rem; letter-spacing: 0.14em; color: rgba(255,255,255,0.45); margin-top: 4px; }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <div id="title">Karakter Seçimi</div>
-    <div id="subtitle">3D Figürler</div>
-    <div id="char-info">
-      <h2 id="char-name-display">Beşiktaş Hero</h2>
-      <p id="char-desc-display">Süper Kahraman Koleksiyonu</p>
-    </div>
-    <div id="char-bar">
-      <div class="char-btn active" data-id="0" onclick="selectChar(0)">
-        <div class="char-icon" style="background:linear-gradient(135deg,#c0392b,#2c3e50)">🕷️</div>
-        <span class="char-name">Kahraman</span>
-      </div>
-      <div class="char-btn" data-id="1" onclick="selectChar(1)">
-        <div class="char-icon" style="background:linear-gradient(135deg,#e91e8c,#3498db)">💗</div>
-        <span class="char-name">K Kalp</span>
-      </div>
-      <div class="char-btn" data-id="2" onclick="selectChar(2)">
-        <div class="char-icon" style="background:linear-gradient(135deg,#8e44ad,#e67e22)">⚡</div>
-        <span class="char-name">Sihirbaz</span>
-      </div>
-      <div class="char-btn" data-id="3" onclick="selectChar(3)">
-        <div class="char-icon" style="background:linear-gradient(135deg,#2c3e50,#7f8c8d)">🦇</div>
-        <span class="char-name">Yarasa</span>
-      </div>
-    </div>
-  </div>
-  <div id="canvas-container"></div>
+<canvas id="c"></canvas>
+<div id="label">
+  <h2>Sihirbaz</h2>
+  <p>SÜRÜKLE · DÖNDÜR · KAYDİR</p>
+</div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-    }
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ── RENDERER ────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x000000, 0);
+
+// ── SCENE / CAMERA ──────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 6.8);
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// ── CONTROLS ─────────────────────────────────────────────────────────────────
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.2, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 2.8;
+controls.maxDistance = 11;
+controls.maxPolarAngle = Math.PI * 0.88;
+controls.update();
+
+// ── LIGHTS ───────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xCCDDEE, 0.55));
+
+const key = new THREE.DirectionalLight(0xFFF8F0, 1.1);
+key.position.set(3, 6, 4);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0xC0D8F8, 0.45);
+fill.position.set(-4, 3, 2);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xFFEEDD, 0.30);
+rim.position.set(0, 2, -5);
+scene.add(rim);
+
+// ── SHADOW CATCHER ────────────────────────────────────────────────────────────
+const shadowPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(10, 10),
+  new THREE.ShadowMaterial({ opacity: 0.18 })
+);
+shadowPlane.rotation.x = -Math.PI / 2;
+shadowPlane.position.y = -0.82;
+shadowPlane.receiveShadow = true;
+scene.add(shadowPlane);
+
+// ── MATERIAL HELPER ───────────────────────────────────────────────────────────
+function mat(color, shininess, specular, side) {
+  return new THREE.MeshPhongMaterial({
+    color: color,
+    shininess: shininess !== undefined ? shininess : 35,
+    specular: specular !== undefined ? specular : 0x222222,
+    side: side || THREE.FrontSide
+  });
+}
+
+// ── MESH HELPER ───────────────────────────────────────────────────────────────
+function mk(geo, material) {
+  const m = new THREE.Mesh(geo, material);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BUILD: SİHİRBAZ (Harry Potter)
+// ════════════════════════════════════════════════════════════════════════════
+function buildSihirbaz() {
+  const g = new THREE.Group();
+
+  // ── Malzemeler ─────────────────────────────────────────────────────────────
+  const mPaper  = mat(0xF0EBE0,  10, 0x333333);   // kağıt yüz
+  const mHair   = mat(0x8A6A38,  12, 0x221108);   // açık kahve saç
+  const mShirt  = mat(0xF0EEE8,  22, 0x333333);   // beyaz gömlek
+  const mCuff   = mat(0xE8E6E0,  28, 0x333333);   // manşet
+  const mSkin   = mat(0xF5C8A0,  38, 0x884433);   // el derisi
+  const mGrey   = mat(0x888882,  32, 0x333333);   // gri pantolon
+  const mBrown  = mat(0x6B3A18,  38, 0x221108);   // kahve ayakkabı
+  const mDbrn   = mat(0x3A1E08,  28, 0x110A04);   // koyu burun
+  const mBlack  = mat(0x111111,  70, 0x333333);   // gözlük çerçeve
+  const mEyeW   = mat(0xF5F5EE,  40, 0x222222);   // göz beyazı
+  const mBlue   = mat(0x5577BB,  75, 0x334488);   // mavi iris
+  const mGold   = mat(0xE8A820,  72, 0x664422);   // altın şimşek
+  const mRedTie = mat(0xAA1515,  48, 0x441111);   // kırmızı kravat
+  const mGoldT  = mat(0xD89818,  62, 0x554411);   // kravat altın şerit
+  const mBelt   = mat(0x555550,  55, 0x333333);   // kemer
+  const mBuckle = mat(0x999990, 100, 0x666666);   // toka
+  const mPlat   = mat(0xE2E0D8,  42, 0x666666);   // platform
+  const mPlatE  = mat(0xCAC8C0,  38, 0x555555);   // platform kenarı
+  const mLip    = mat(0xA06070,  28, 0x441122);   // dudak
+  const mBrow   = mat(0x7A5830,  12, 0x222211);   // kaş
+  const mLace   = mat(0xCCBBA0,  18, 0x111111);   // bağcık
+  const mWand   = mat(0x4A2208,  30, 0x221108);   // asa
+  const mWandK  = mat(0x7A4820,  22, 0x332211);   // asa düğüm
+
+  // ── KAFA (kağıt doku, hafif oval) ─────────────────────────────────────────
+  const head = mk(new THREE.SphereGeometry(0.465, 36, 36), mPaper);
+  head.position.set(0, 2.02, 0);
+  head.scale.set(0.96, 1.11, 0.84);
+  g.add(head);
+
+  // ── SAÇ ────────────────────────────────────────────────────────────────────
+  const hairGeo = new THREE.SphereGeometry(0.476, 36, 20, 0, Math.PI * 2, 0, Math.PI * 0.40);
+  const hair = mk(hairGeo, mHair);
+  hair.position.set(0, 2.02, 0);
+  hair.scale.set(0.96, 1.11, 0.84);
+  hair.rotation.x = 0.18;
+  g.add(hair);
+
+  // Öne düşen perçem
+  const tuft = mk(new THREE.SphereGeometry(0.13, 14, 10), mHair);
+  tuft.position.set(0.05, 2.40, 0.28);
+  tuft.scale.set(0.55, 0.38, 0.75);
+  g.add(tuft);
+
+  // ── GÖZLER ─────────────────────────────────────────────────────────────────
+  [-0.165, 0.165].forEach(x => {
+    // Beyaz
+    const ew = mk(new THREE.SphereGeometry(0.063, 18, 18), mEyeW);
+    ew.position.set(x, 2.02, 0.376);
+    ew.scale.set(1, 0.86, 0.56);
+    g.add(ew);
+    // Iris
+    const ir = mk(new THREE.SphereGeometry(0.044, 16, 16), mBlue);
+    ir.position.set(x, 2.02, 0.410);
+    ir.scale.set(1, 0.86, 0.52);
+    g.add(ir);
+    // Pupil
+    const pu = mk(new THREE.SphereGeometry(0.027, 12, 12), mBlack);
+    pu.position.set(x, 2.02, 0.428);
+    g.add(pu);
+    // Işık noktası
+    const hl = mk(new THREE.SphereGeometry(0.009, 8, 8), mat(0xFFFFFF, 100, 0xFFFFFF));
+    hl.position.set(x - 0.016, 2.032, 0.434);
+    g.add(hl);
+  });
+
+  // ── KAŞLAR ─────────────────────────────────────────────────────────────────
+  [[-0.165, 0.14], [0.165, -0.14]].forEach(([x, rz]) => {
+    const brow = mk(new THREE.BoxGeometry(0.185, 0.030, 0.022), mBrow);
+    brow.position.set(x, 2.115, 0.375);
+    brow.rotation.z = rz;
+    g.add(brow);
+  });
+
+  // ── GÖZLÜK ─────────────────────────────────────────────────────────────────
+  [-0.165, 0.165].forEach(x => {
+    const lens = mk(new THREE.TorusGeometry(0.100, 0.013, 8, 30), mBlack);
+    lens.position.set(x, 2.02, 0.392);
+    lens.rotation.x = Math.PI / 2;
+    g.add(lens);
+  });
+  // Köprü
+  const bridge = mk(new THREE.CylinderGeometry(0.008, 0.008, 0.145, 6), mBlack);
+  bridge.position.set(0, 2.02, 0.392);
+  bridge.rotation.z = Math.PI / 2;
+  g.add(bridge);
+  // Kulak kolları
+  [-1, 1].forEach(s => {
+    const arm = mk(new THREE.CylinderGeometry(0.007, 0.007, 0.28, 6), mBlack);
+    arm.position.set(s * 0.305, 2.02, 0.330);
+    arm.rotation.y = s * 0.55;
+    arm.rotation.z = Math.PI / 2;
+    g.add(arm);
+  });
+
+  // ── ŞİMŞEK YARA ────────────────────────────────────────────────────────────
+  const s1 = mk(new THREE.BoxGeometry(0.016, 0.072, 0.016), mGold);
+  s1.position.set(0.07, 2.275, 0.345); s1.rotation.z = 0.32;
+  g.add(s1);
+  const s2 = mk(new THREE.BoxGeometry(0.016, 0.064, 0.016), mGold);
+  s2.position.set(0.095, 2.21, 0.355); s2.rotation.z = -0.38;
+  g.add(s2);
+
+  // ── DUDAK ──────────────────────────────────────────────────────────────────
+  const lips = mk(new THREE.BoxGeometry(0.205, 0.038, 0.020), mLip);
+  lips.position.set(0, 1.885, 0.402);
+  g.add(lips);
+
+  // ── BOYUN ──────────────────────────────────────────────────────────────────
+  const neck = mk(new THREE.CylinderGeometry(0.098, 0.118, 0.22, 14), mShirt);
+  neck.position.set(0, 1.580, 0);
+  g.add(neck);
+
+  // Yaka
+  [[-0.105, 0.30], [0.105, -0.30]].forEach(([x, rz]) => {
+    const col = mk(new THREE.BoxGeometry(0.17, 0.11, 0.055), mShirt);
+    col.position.set(x, 1.520, 0.145);
+    col.rotation.z = rz;
+    g.add(col);
+  });
+
+  // ── GÖVDE (gömlek) ─────────────────────────────────────────────────────────
+  const torso = mk(new THREE.BoxGeometry(0.70, 0.640, 0.390), mShirt);
+  torso.position.set(0, 1.140, 0);
+  g.add(torso);
+
+  // Defter çizgisi dokusu
+  const lineMat = mat(0xD6D2C8, 8, 0x111111);
+  for (let i = 0; i < 6; i++) {
+    const line = mk(new THREE.BoxGeometry(0.62, 0.007, 0.004), lineMat);
+    line.position.set(0, 0.88 + i * 0.08, 0.197);
+    g.add(line);
   }
-  </script>
-  <script type="module" src="main.js"></script>
+
+  // ── KRAVAT ─────────────────────────────────────────────────────────────────
+  const tieBody = mk(new THREE.BoxGeometry(0.115, 0.580, 0.022), mRedTie);
+  tieBody.position.set(0, 1.100, 0.216);
+  g.add(tieBody);
+  // Kravat düğümü
+  const tieKnot = mk(new THREE.BoxGeometry(0.106, 0.088, 0.038), mRedTie);
+  tieKnot.position.set(0, 1.468, 0.218);
+  g.add(tieKnot);
+  // Gryffindor altın şeritler
+  for (let i = 0; i < 5; i++) {
+    const stripe = mk(new THREE.BoxGeometry(0.115, 0.038, 0.024), mGoldT);
+    stripe.position.set(0, 1.335 - i * 0.115, 0.216);
+    stripe.rotation.z = 0.52;
+    g.add(stripe);
+  }
+
+  // ── KOLLAR ─────────────────────────────────────────────────────────────────
+  // Sol üst kol
+  const luArm = mk(new THREE.CylinderGeometry(0.096, 0.086, 0.490, 14), mShirt);
+  luArm.position.set(-0.435, 1.095, 0); luArm.rotation.z = 0.14;
+  g.add(luArm);
+  // Sağ üst kol
+  const ruArm = mk(new THREE.CylinderGeometry(0.096, 0.086, 0.490, 14), mShirt);
+  ruArm.position.set(0.435, 1.095, 0); ruArm.rotation.z = -0.14;
+  g.add(ruArm);
+  // Sol ön kol
+  const lfArm = mk(new THREE.CylinderGeometry(0.086, 0.078, 0.450, 14), mShirt);
+  lfArm.position.set(-0.495, 0.762, 0); lfArm.rotation.z = 0.07;
+  g.add(lfArm);
+  // Sağ ön kol — asa tutan el biraz dışarı
+  const rfArm = mk(new THREE.CylinderGeometry(0.086, 0.078, 0.450, 14), mShirt);
+  rfArm.position.set(0.495, 0.762, 0); rfArm.rotation.z = -0.12;
+  g.add(rfArm);
+  // Manşetler
+  [-0.530, 0.530].forEach((x, i) => {
+    const cuff = mk(new THREE.CylinderGeometry(0.090, 0.090, 0.062, 14), mCuff);
+    cuff.position.set(x, 0.528, 0); cuff.rotation.z = (i === 0 ? 0.07 : -0.12);
+    g.add(cuff);
+  });
+  // Eller
+  const lHand = mk(new THREE.SphereGeometry(0.088, 16, 16), mSkin);
+  lHand.position.set(-0.548, 0.476, 0); lHand.scale.set(0.90, 0.80, 0.88);
+  g.add(lHand);
+  const rHand = mk(new THREE.SphereGeometry(0.088, 16, 16), mSkin);
+  rHand.position.set(0.552, 0.468, 0.02); rHand.scale.set(0.90, 0.80, 0.88);
+  g.add(rHand);
+
+  // ── ASA (sağ elde, aşağı-diyagonal) ──────────────────────────────────────
+  const wandBody = mk(new THREE.CylinderGeometry(0.020, 0.015, 0.540, 8), mWand);
+  wandBody.position.set(0.672, 0.358, 0.045);
+  wandBody.rotation.z = -0.62;
+  g.add(wandBody);
+  const wandTip = mk(new THREE.ConeGeometry(0.015, 0.075, 8), mWand);
+  wandTip.position.set(0.793, 0.185, 0.048);
+  wandTip.rotation.z = -0.62;
+  g.add(wandTip);
+  const knot = mk(new THREE.SphereGeometry(0.028, 10, 10), mWandK);
+  knot.position.set(0.618, 0.398, 0.044);
+  g.add(knot);
+
+  // ── KEMER ──────────────────────────────────────────────────────────────────
+  const belt = mk(new THREE.BoxGeometry(0.715, 0.072, 0.410), mBelt);
+  belt.position.set(0, 0.835, 0);
+  g.add(belt);
+  const buckle = mk(new THREE.BoxGeometry(0.098, 0.080, 0.048), mBuckle);
+  buckle.position.set(0, 0.835, 0.228);
+  g.add(buckle);
+
+  // ── PANTOLON ───────────────────────────────────────────────────────────────
+  const pantsTop = mk(new THREE.BoxGeometry(0.675, 0.480, 0.395), mGrey);
+  pantsTop.position.set(0, 0.566, 0);
+  g.add(pantsTop);
+  [-0.200, 0.200].forEach(x => {
+    const thigh = mk(new THREE.CylinderGeometry(0.150, 0.130, 0.510, 14), mGrey);
+    thigh.position.set(x, 0.192, 0);
+    g.add(thigh);
+    const shin = mk(new THREE.CylinderGeometry(0.128, 0.110, 0.490, 14), mGrey);
+    shin.position.set(x, -0.305, 0);
+    g.add(shin);
+  });
+
+  // ── AYAKKABILAR ────────────────────────────────────────────────────────────
+  [-0.200, 0.200].forEach(x => {
+    const shoe = mk(new THREE.BoxGeometry(0.225, 0.135, 0.375), mBrown);
+    shoe.position.set(x, -0.608, 0.042);
+    g.add(shoe);
+    // Burun
+    const toe = mk(new THREE.BoxGeometry(0.210, 0.108, 0.098), mDbrn);
+    toe.position.set(x, -0.618, 0.224);
+    g.add(toe);
+    // Bağcık
+    const lace = mk(new THREE.BoxGeometry(0.170, 0.014, 0.125), mLace);
+    lace.position.set(x, -0.558, 0.088);
+    g.add(lace);
+    for (let i = 0; i < 3; i++) {
+      const cross = mk(new THREE.BoxGeometry(0.175, 0.012, 0.010), mLace);
+      cross.position.set(x, -0.548 - i * 0.020, 0.070 + i * 0.020);
+      g.add(cross);
+    }
+  });
+
+  // ── PLATFORM ───────────────────────────────────────────────────────────────
+  const platEdge = mk(new THREE.BoxGeometry(1.40, 0.078, 0.98), mPlatE);
+  platEdge.position.set(0, -0.778, 0);
+  g.add(platEdge);
+  const platTop = mk(new THREE.BoxGeometry(1.36, 0.076, 0.94), mPlat);
+  platTop.position.set(0, -0.760, 0);
+  g.add(platTop);
+
+  return g;
+}
+
+// ── SAHNEYE EKLE ─────────────────────────────────────────────────────────────
+const character = buildSihirbaz();
+scene.add(character);
+
+// ── OTO DÖNDÜRME ─────────────────────────────────────────────────────────────
+let autoRot = true, lastTouch = 0;
+controls.addEventListener('start', () => { autoRot = false; lastTouch = Date.now(); });
+controls.addEventListener('end',   () => { lastTouch = Date.now(); });
+
+// ── ANİMASYON ─────────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  if (!autoRot && Date.now() - lastTouch > 3200) autoRot = true;
+  if (autoRot) character.rotation.y += 0.006;
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
 </body>
 </html>

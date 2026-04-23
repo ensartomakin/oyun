@@ -3,251 +3,45 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>3D Karakter Görüntüleyici</title>
+  <title>Kafa Topu 3D — Faz 1A</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: #111318;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      color: #fff;
-      overflow: hidden;
-      user-select: none;
-    }
-
+    body { overflow: hidden; background: #0b1a2e; font-family: 'Segoe UI', sans-serif; }
     #c { display: block; width: 100vw; height: 100vh; }
-
-    /* ── Drop overlay ─────────────────────────────────────────────── */
-    #drop-overlay {
-      position: fixed; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 18px;
-      background: rgba(10,12,18,0.88);
-      backdrop-filter: blur(6px);
-      z-index: 30;
-      transition: opacity 0.35s;
+    #phase-tag {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12);
+      padding: 6px 18px; border-radius: 20px;
+      font-size: 0.72rem; letter-spacing: 0.14em;
+      color: rgba(255,255,255,0.55); pointer-events: none;
     }
-    #drop-overlay.hidden { opacity: 0; pointer-events: none; }
-
-    #drop-box {
-      width: 360px; max-width: 90vw;
-      border: 2px dashed rgba(255,255,255,0.25);
-      border-radius: 20px;
-      padding: 44px 32px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+    #hint {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      font-size: 0.62rem; color: rgba(255,255,255,0.28);
+      letter-spacing: 0.1em; pointer-events: none;
     }
-    #drop-box.drag-over {
-      border-color: #5599FF;
-      background: rgba(85,153,255,0.08);
-    }
-    #drop-box .icon { font-size: 3.2rem; margin-bottom: 12px; }
-    #drop-box h2   { font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; }
-    #drop-box p    { font-size: 0.78rem; color: rgba(255,255,255,0.45); line-height: 1.6; }
-    #drop-box .btn {
-      display: inline-block; margin-top: 20px;
-      padding: 10px 28px; border-radius: 10px;
-      background: #5599FF; font-size: 0.82rem; font-weight: 600;
-      cursor: pointer; letter-spacing: 0.05em;
-    }
-    #file-input { display: none; }
-
-    /* ── Meshy kutusu ─────────────────────────────────────────────── */
-    #meshy-box {
-      width: 360px; max-width: 90vw;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px;
-      padding: 22px 28px;
-    }
-    #meshy-box h3 { font-size: 0.8rem; letter-spacing: 0.12em; color: rgba(255,255,255,0.4); text-transform: uppercase; margin-bottom: 14px; }
-    .step {
-      display: flex; align-items: flex-start; gap: 12px;
-      margin-bottom: 12px;
-    }
-    .step-num {
-      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-      background: #5599FF; display: flex; align-items: center; justify-content: center;
-      font-size: 0.72rem; font-weight: 700;
-    }
-    .step-text { font-size: 0.78rem; color: rgba(255,255,255,0.65); line-height: 1.55; }
-    .step-text strong { color: #fff; }
-    .meshy-link {
-      display: block; margin-top: 16px; text-align: center;
-      padding: 9px 0; border-radius: 9px;
-      background: linear-gradient(90deg, #6A3AFF, #5599FF);
-      font-size: 0.80rem; font-weight: 600; letter-spacing: 0.06em;
-      cursor: pointer;
-    }
-
-    /* ── Alt karakter slotları ────────────────────────────────────── */
-    #slots {
-      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 12px;
-      background: rgba(10,12,18,0.75);
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(255,255,255,0.09);
-      border-radius: 18px;
-      padding: 14px 20px;
-      z-index: 20;
-    }
-    .slot {
-      width: 64px; height: 64px; border-radius: 12px;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 5px;
-      cursor: pointer;
-      border: 2px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.04);
-      transition: all 0.22s; position: relative; overflow: hidden;
-    }
-    .slot:hover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
-    .slot.active {
-      border-color: #5599FF;
-      background: rgba(85,153,255,0.12);
-      box-shadow: 0 0 18px rgba(85,153,255,0.35);
-    }
-    .slot.loaded .slot-empty { display: none; }
-    .slot-thumb { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; display: none; }
-    .slot.loaded .slot-thumb { display: block; }
-    .slot-empty { font-size: 1.4rem; opacity: 0.45; }
-    .slot-name {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      background: rgba(0,0,0,0.55); font-size: 0.48rem;
-      text-align: center; padding: 2px 0; letter-spacing: 0.06em;
-      text-transform: uppercase; display: none;
-    }
-    .slot.loaded .slot-name { display: block; }
-    .slot-add-btn {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.2s;
-      background: rgba(85,153,255,0.18); border-radius: 10px;
-      font-size: 1.2rem;
-    }
-    .slot:hover .slot-add-btn { opacity: 1; }
-
-    /* ── Üst bilgi ────────────────────────────────────────────────── */
-    #topbar {
-      position: fixed; top: 0; left: 0; right: 0;
-      height: 54px; padding: 0 24px;
-      display: flex; align-items: center; justify-content: space-between;
-      background: linear-gradient(to bottom, rgba(10,12,18,0.85), transparent);
-      z-index: 20; pointer-events: none;
-    }
-    #char-title { font-size: 1.0rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-    #hint { font-size: 0.65rem; color: rgba(255,255,255,0.35); letter-spacing: 0.1em; }
-
-    /* ── Loading spinner ──────────────────────────────────────────── */
-    #loading {
-      position: fixed; inset: 0; display: none;
-      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
-      background: rgba(10,12,18,0.7); backdrop-filter: blur(4px); z-index: 40;
-    }
-    #loading.show { display: flex; }
-    .spinner {
-      width: 44px; height: 44px; border: 3px solid rgba(255,255,255,0.1);
-      border-top-color: #5599FF; border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #load-pct { font-size: 0.85rem; color: rgba(255,255,255,0.6); }
-
-    /* ── Drag-over vurgu ──────────────────────────────────────────── */
-    body.dragging-file #c { outline: 3px dashed #5599FF; outline-offset: -3px; }
   </style>
 </head>
 <body>
-
 <canvas id="c"></canvas>
+<div id="phase-tag">FAZ 1A — SAHA · IŞIK · KAMERA · TRİBÜN</div>
+<div id="hint">SÜRÜKLE · DÖNDÜR · YAKLAŞTIR</div>
 
-<!-- Üst bilgi -->
-<div id="topbar">
-  <span id="char-title">Karakter Görüntüleyici</span>
-  <span id="hint">SÜRÜKLE · DÖNDÜR · KAYDİR · YAKLAŞTIR</span>
-</div>
-
-<!-- Drop overlay (başlangıçta görünür) -->
-<div id="drop-overlay">
-  <div id="drop-box">
-    <div class="icon">🎮</div>
-    <h2>3D Model Yükle</h2>
-    <p>
-      Meshy.ai'dan ürettiğin <strong>.glb</strong> dosyasını<br>
-      buraya sürükle-bırak veya seç
-    </p>
-    <div class="btn" id="browse-btn">Dosya Seç</div>
-    <input type="file" id="file-input" accept=".glb,.gltf"/>
-  </div>
-
-  <div id="meshy-box">
-    <h3>📸 Fotoğraftan 3D Model → Meshy.ai</h3>
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-text"><strong>meshy.ai</strong> sitesine giriş yap (ücretsiz)</div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-text"><strong>"Image to 3D"</strong> seç → karakter fotoğrafını yükle</div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-text">~2 dakika bekle → <strong>"Download GLB"</strong> tıkla</div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-text">İndirilen <strong>.glb</strong> dosyasını bu sayfaya sürükle</div>
-    </div>
-    <div class="meshy-link" onclick="window.open('https://www.meshy.ai','_blank')">
-      meshy.ai'ya Git →
-    </div>
-  </div>
-</div>
-
-<!-- Yükleniyor -->
-<div id="loading">
-  <div class="spinner"></div>
-  <div id="load-pct">Yükleniyor...</div>
-</div>
-
-<!-- Alt karakter slotları -->
-<div id="slots">
-  <div class="slot active" id="slot-0" onclick="switchSlot(0)">
-    <img class="slot-thumb" id="thumb-0"/>
-    <div class="slot-empty">＋</div>
-    <div class="slot-name" id="name-0">—</div>
-    <div class="slot-add-btn" onclick="openFileForSlot(0,event)">＋</div>
-  </div>
-  <div class="slot" id="slot-1" onclick="switchSlot(1)">
-    <img class="slot-thumb" id="thumb-1"/>
-    <div class="slot-empty">＋</div>
-    <div class="slot-name" id="name-1">—</div>
-    <div class="slot-add-btn" onclick="openFileForSlot(1,event)">＋</div>
-  </div>
-  <div class="slot" id="slot-2" onclick="switchSlot(2)">
-    <img class="slot-thumb" id="thumb-2"/>
-    <div class="slot-empty">＋</div>
-    <div class="slot-name" id="name-2">—</div>
-    <div class="slot-add-btn" onclick="openFileForSlot(2,event)">＋</div>
-  </div>
-  <div class="slot" id="slot-3" onclick="switchSlot(3)">
-    <img class="slot-thumb" id="thumb-3"/>
-    <div class="slot-empty">＋</div>
-    <div class="slot-name" id="name-3">—</div>
-    <div class="slot-add-btn" onclick="openFileForSlot(3,event)">＋</div>
-  </div>
-</div>
-
-<!-- Three.js + loaders (global builds — file:// ile çalışır) -->
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-
 <script>
-// ════════════════════════════════════════════════════════════════════════════
-//  SAHNE
-// ════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+//  FAZ 1A — SAHA, IŞIK, KAMERA, TRİBÜN
+// ═══════════════════════════════════════════════════════════════════
+
+// ── SABİTLER ────────────────────────────────────────────────────────
+const FIELD_W  = 22;   // saha genişliği (x: -11 … +11)
+const FIELD_D  = 10;   // saha derinliği (z: -5 … +5)
+const GOAL_H   = 2.7;  // kale yüksekliği
+const GOAL_W   = 3.6;  // kale ağzı genişliği (z ekseni)
+const GOAL_D   = 1.2;  // kale derinliği (x ekseni)
+
+// ── RENDERER ────────────────────────────────────────────────────────
 const canvas   = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -256,14 +50,21 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 renderer.outputEncoding    = THREE.sRGBEncoding;
 renderer.toneMapping       = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.25;
-renderer.setClearColor(0x111318);
+renderer.toneMappingExposure = 1.15;
 
-const scene  = new THREE.Scene();
-scene.background = new THREE.Color(0x111318);
+// ── SAHNE ───────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1a2e);
+scene.fog = new THREE.FogExp2(0x0b1a2e, 0.018);
 
-const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.01, 200);
-camera.position.set(0, 1.6, 4.8);
+// ── KAMERA ──────────────────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(
+  52,
+  window.innerWidth / window.innerHeight,
+  0.1, 120
+);
+camera.position.set(0, 8, 20);
+camera.lookAt(0, 2, 0);
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -271,262 +72,333 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
 });
 
-// ── Kontroller ────────────────────────────────────────────────────────────
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.0, 0);
-controls.enableDamping    = true;
-controls.dampingFactor    = 0.06;
-controls.minDistance      = 0.5;
-controls.maxDistance      = 20;
-controls.maxPolarAngle    = Math.PI * 0.90;
-controls.update();
+// Geliştirme sırasında orbit kontrolü (Faz 1B'de kaldırılacak)
+const orbit = new THREE.OrbitControls(camera, renderer.domElement);
+orbit.target.set(0, 2, 0);
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.07;
+orbit.minDistance   = 4;
+orbit.maxDistance   = 40;
+orbit.maxPolarAngle = Math.PI * 0.82;
+orbit.update();
 
-// ── Işıklar (FIFA/FIFA FC benzeri stüdyo aydınlatma) ─────────────────────
-// Gökyüzü + yansıma ışığı
-const hemi = new THREE.HemisphereLight(0xCCDDFF, 0x445533, 0.5);
+// ── IŞIKLAR ─────────────────────────────────────────────────────────
+
+// Ortam ışığı (gökyüzü mavi tonu, zemin yeşil tonu)
+const hemi = new THREE.HemisphereLight(0x99bbdd, 0x224422, 0.55);
 scene.add(hemi);
 
-// Ana güçlü ışık (gölgeli)
-const key = new THREE.DirectionalLight(0xFFF8F0, 1.05);
-key.position.set(2.5, 5, 3);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.near = 0.1;
-key.shadow.camera.far  = 30;
-key.shadow.camera.left = key.shadow.camera.bottom = -4;
-key.shadow.camera.right = key.shadow.camera.top    =  4;
-key.shadow.bias = -0.001;
-scene.add(key);
+// Ana güneş ışığı — gölgeli
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.1);
+sun.position.set(8, 18, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near   = 0.5;
+sun.shadow.camera.far    = 60;
+sun.shadow.camera.left   = -18;
+sun.shadow.camera.right  =  18;
+sun.shadow.camera.top    =  14;
+sun.shadow.camera.bottom = -6;
+sun.shadow.bias          = -0.0008;
+scene.add(sun);
 
-// Doldurma ışığı (sol)
-const fill = new THREE.DirectionalLight(0xC5DCF8, 0.38);
-fill.position.set(-3, 3, 1.5);
+// Doldurma ışığı (sol + hafif soğuk)
+const fill = new THREE.DirectionalLight(0x7799cc, 0.38);
+fill.position.set(-8, 8, 4);
 scene.add(fill);
 
-// Arka kenar ışığı (rim light)
-const rim = new THREE.DirectionalLight(0xFFEEDD, 0.22);
-rim.position.set(0, 2.5, -4);
+// Arka kenar ışığı (rim)
+const rim = new THREE.DirectionalLight(0xffeedd, 0.20);
+rim.position.set(0, 4, -10);
 scene.add(rim);
 
-// ── Zemin (gölge catcher) ─────────────────────────────────────────────────
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(3, 64),
-  new THREE.ShadowMaterial({ opacity: 0.28 })
+// ── SAHA ────────────────────────────────────────────────────────────
+
+// Çim zemin
+const turfMat = new THREE.MeshLambertMaterial({ color: 0x1a7a28 });
+const turf = new THREE.Mesh(
+  new THREE.BoxGeometry(FIELD_W, 0.22, FIELD_D),
+  turfMat
 );
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
+turf.position.y = -0.11;
+turf.receiveShadow = true;
+scene.add(turf);
 
-// ── Hafif zemin ışık halkası (dekoratif) ──────────────────────────────────
-const ring = new THREE.Mesh(
-  new THREE.RingGeometry(0.55, 0.75, 64),
-  new THREE.MeshBasicMaterial({ color: 0x3355AA, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
-);
-ring.rotation.x = -Math.PI / 2;
-ring.position.y  = 0.001;
-scene.add(ring);
-
-// ════════════════════════════════════════════════════════════════════════════
-//  MODEL YÖNETİMİ
-// ════════════════════════════════════════════════════════════════════════════
-const slots     = [null, null, null, null]; // THREE.Group[]
-const slotNames = ['—', '—', '—', '—'];
-let   activeSlot = 0;
-let   pendingSlot = 0;  // hangi slota dosya yükleniyor
-
-const loader = new THREE.GLTFLoader();
-
-function loadGLB(url, fileName, slotIdx) {
-  document.getElementById('loading').classList.add('show');
-  document.getElementById('load-pct').textContent = 'Yükleniyor...';
-
-  loader.load(
-    url,
-    (gltf) => {
-      // Eski modeli sil
-      if (slots[slotIdx]) {
-        scene.remove(slots[slotIdx]);
-        slots[slotIdx].traverse(obj => {
-          if (obj.geometry) obj.geometry.dispose();
-          if (obj.material) {
-            if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-            else obj.material.dispose();
-          }
-        });
-      }
-
-      const model = gltf.scene;
-
-      // Gölge aktif et
-      model.traverse(obj => {
-        if (obj.isMesh) {
-          obj.castShadow    = true;
-          obj.receiveShadow = true;
-          // PBR iyileştirme: zaten MeshStandardMaterial ise envMap ekle
-          if (obj.material && obj.material.isMeshStandardMaterial) {
-            obj.material.roughness   = Math.min(obj.material.roughness  || 0.6, 0.85);
-            obj.material.metalness   = Math.max(obj.material.metalness  || 0, 0);
-          }
-        }
-      });
-
-      // Model boyutunu ve konumunu normalize et
-      const box    = new THREE.Box3().setFromObject(model);
-      const size   = new THREE.Vector3();
-      const center = new THREE.Vector3();
-      box.getSize(size);
-      box.getCenter(center);
-
-      // Yüksekliği ~2 birime getir
-      const targetH = 2.2;
-      const scale   = targetH / size.y;
-      model.scale.setScalar(scale);
-
-      // Ayak tabanını zemine oturtu
-      box.setFromObject(model);
-      box.getCenter(center);
-      box.getSize(size);
-      model.position.x = -center.x;
-      model.position.y = -box.min.y;
-      model.position.z = -center.z;
-
-      // Kameraya fit et
-      const camDist = Math.max(size.x, size.y, size.z) * 1.65;
-      camera.position.set(0, size.y * 0.55, camDist);
-      controls.target.set(0, size.y * 0.5 * scale * 0.9, 0);
-      controls.update();
-
-      slots[slotIdx]     = model;
-      slotNames[slotIdx] = fileName.replace(/\.(glb|gltf)$/i, '').substring(0, 12);
-
-      scene.add(model);
-
-      // Sadece aktif slottaki modeli göster
-      updateVisibility();
-      updateSlotUI(slotIdx);
-
-      // Aktif slota geç
-      switchSlot(slotIdx);
-
-      document.getElementById('loading').classList.remove('show');
-      document.getElementById('drop-overlay').classList.add('hidden');
-    },
-    (xhr) => {
-      if (xhr.lengthComputable) {
-        const pct = Math.round(xhr.loaded / xhr.total * 100);
-        document.getElementById('load-pct').textContent = `Yükleniyor... ${pct}%`;
-      }
-    },
-    (err) => {
-      console.error(err);
-      document.getElementById('loading').classList.remove('show');
-      alert('Model yüklenemedi. Geçerli bir .glb dosyası seçin.');
-    }
-  );
+// Koyu/açık yeşil çim şeritleri (gerçek saha etkisi)
+const darkTurf = new THREE.MeshLambertMaterial({ color: 0x157022 });
+for (let i = 0; i < 11; i++) {
+  if (i % 2 === 0) {
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(2.0, 0.01, FIELD_D),
+      darkTurf
+    );
+    stripe.position.set(-10 + i * 2 + 1, 0.005, 0);
+    scene.add(stripe);
+  }
 }
 
-function updateVisibility() {
-  slots.forEach((m, i) => {
-    if (m) m.visible = (i === activeSlot);
+// Beyaz çizgi malzemesi
+const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+function addLine(x, z, w, d, h) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h || 0.022, d),
+    lineMat
+  );
+  m.position.set(x, 0.011, z);
+  scene.add(m);
+}
+
+// Kenar çizgileri (x ekseni boyunca)
+addLine(0, -(FIELD_D / 2) + 0.06, FIELD_W, 0.12);
+addLine(0,  (FIELD_D / 2) - 0.06, FIELD_W, 0.12);
+
+// Yan çizgiler (z ekseni boyunca)
+addLine(-(FIELD_W / 2) + 0.06, 0, 0.12, FIELD_D);
+addLine( (FIELD_W / 2) - 0.06, 0, 0.12, FIELD_D);
+
+// Orta çizgi
+addLine(0, 0, 0.12, FIELD_D);
+
+// Orta daire
+const centerCircle = new THREE.Mesh(
+  new THREE.RingGeometry(1.85, 2.0, 56),
+  lineMat
+);
+centerCircle.rotation.x = -Math.PI / 2;
+centerCircle.position.y = 0.013;
+scene.add(centerCircle);
+
+// Orta nokta
+const centerDot = new THREE.Mesh(
+  new THREE.CircleGeometry(0.11, 16),
+  lineMat
+);
+centerDot.rotation.x = -Math.PI / 2;
+centerDot.position.y = 0.014;
+scene.add(centerDot);
+
+// Ceza sahaları (her iki taraf)
+[-1, 1].forEach(side => {
+  const bx = side * (FIELD_W / 2 - 0.06);
+  const pw = 2.8;   // ceza sahası derinliği
+  const ph = 5.0;   // ceza sahası genişliği (z)
+
+  // Yatay çizgiler
+  addLine(bx - side * (pw / 2), -(ph / 2), pw, 0.12);
+  addLine(bx - side * (pw / 2),  (ph / 2), pw, 0.12);
+  // Dikey çizgi
+  addLine(bx - side * pw, 0, 0.12, ph);
+});
+
+// Köşe işaretleri
+[[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx, sz]) => {
+  const c = new THREE.Mesh(new THREE.CircleGeometry(0.14, 12), lineMat);
+  c.rotation.x = -Math.PI / 2;
+  c.position.set(sx * (FIELD_W/2 - 0.1), 0.015, sz * (FIELD_D/2 - 0.1));
+  scene.add(c);
+});
+
+// ── KALE ────────────────────────────────────────────────────────────
+
+const postMat = new THREE.MeshPhongMaterial({
+  color: 0xeeeeee, shininess: 70, specular: 0x777777
+});
+const netMat = new THREE.MeshPhongMaterial({
+  color: 0xccddff, transparent: true, opacity: 0.20,
+  side: THREE.DoubleSide, shininess: 10
+});
+
+function buildGoal(side) {
+  // side: -1 = sol kale, +1 = sağ kale
+  const g = new THREE.Group();
+  const x = side * (FIELD_W / 2);
+
+  // Direk yardımcı fonksiyon
+  function post(px, py, pz, rx, ry, rz, len) {
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.075, 0.075, len, 12),
+      postMat
+    );
+    m.position.set(px, py, pz);
+    if (rx) m.rotation.x = rx;
+    if (ry) m.rotation.y = ry;
+    if (rz) m.rotation.z = rz;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+  }
+
+  // Sol direk
+  post(x, GOAL_H / 2, -GOAL_W / 2, 0, 0, 0, GOAL_H);
+  // Sağ direk
+  post(x, GOAL_H / 2,  GOAL_W / 2, 0, 0, 0, GOAL_H);
+  // Üst direk (yatay)
+  post(x, GOAL_H, 0, Math.PI / 2, 0, 0, GOAL_W);
+  // Arka direk (derinlik)
+  post(x + side * GOAL_D, GOAL_H / 2, -GOAL_W / 2, 0, 0, 0, GOAL_H);
+  post(x + side * GOAL_D, GOAL_H / 2,  GOAL_W / 2, 0, 0, 0, GOAL_H);
+  post(x + side * GOAL_D, GOAL_H, 0, Math.PI / 2, 0, 0, GOAL_W);
+  // Yan yatay çubuklar (alt)
+  post(x + side * GOAL_D / 2, 0.075, -GOAL_W / 2, 0, 0, Math.PI / 2, GOAL_D);
+  post(x + side * GOAL_D / 2, 0.075,  GOAL_W / 2, 0, 0, Math.PI / 2, GOAL_D);
+  // Üst yatay çubuklar
+  post(x + side * GOAL_D / 2, GOAL_H, -GOAL_W / 2, 0, 0, Math.PI / 2, GOAL_D);
+  post(x + side * GOAL_D / 2, GOAL_H,  GOAL_W / 2, 0, 0, Math.PI / 2, GOAL_D);
+
+  // File — arka panel
+  const netBack = new THREE.Mesh(
+    new THREE.PlaneGeometry(GOAL_W, GOAL_H), netMat
+  );
+  netBack.position.set(x + side * GOAL_D, GOAL_H / 2, 0);
+  netBack.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  g.add(netBack);
+
+  // File — taban
+  const netFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(GOAL_D, GOAL_W), netMat
+  );
+  netFloor.rotation.x = -Math.PI / 2;
+  netFloor.rotation.z = side < 0 ? 0 : Math.PI / 2;
+  netFloor.position.set(x + side * GOAL_D / 2, 0.02, 0);
+  g.add(netFloor);
+
+  // File — üst
+  const netTop = new THREE.Mesh(
+    new THREE.PlaneGeometry(GOAL_D, GOAL_W), netMat
+  );
+  netTop.rotation.x = Math.PI / 2;
+  netTop.rotation.z = side < 0 ? 0 : Math.PI / 2;
+  netTop.position.set(x + side * GOAL_D / 2, GOAL_H, 0);
+  g.add(netTop);
+
+  // File — sol/sağ yanlar
+  [-1, 1].forEach(zSide => {
+    const netSide = new THREE.Mesh(
+      new THREE.PlaneGeometry(GOAL_D, GOAL_H), netMat
+    );
+    netSide.rotation.y = zSide < 0 ? -Math.PI / 2 : Math.PI / 2;
+    netSide.position.set(x + side * GOAL_D / 2, GOAL_H / 2, zSide * GOAL_W / 2);
+    g.add(netSide);
+  });
+
+  scene.add(g);
+}
+
+buildGoal(-1);
+buildGoal(1);
+
+// ── TRİBÜN ──────────────────────────────────────────────────────────
+
+function buildStands() {
+  // Her iki uzun kenar için tribün basamakları
+  const rowColors = [0x1a2d4a, 0x1f3555, 0x243d60, 0x2a456b, 0x304d76];
+  const accentColors = [0x3355aa, 0x2244bb, 0x1133cc, 0x4466bb, 0x2255aa];
+
+  [-1, 1].forEach(side => {
+    for (let row = 0; row < 5; row++) {
+      const rowDepth   = 1.8;
+      const rowHeight  = 1.1;
+      const zOffset    = side * (FIELD_D / 2 + 1.0 + row * rowDepth);
+      const yOffset    = 0.55 + row * rowHeight;
+
+      // Basamak zemini
+      const stand = new THREE.Mesh(
+        new THREE.BoxGeometry(FIELD_W * 1.35, rowHeight, rowDepth),
+        new THREE.MeshLambertMaterial({ color: rowColors[row] })
+      );
+      stand.position.set(0, yOffset, zOffset);
+      scene.add(stand);
+
+      // Seyirci renk aksentleri (küçük renkli kutular)
+      for (let col = -8; col <= 8; col++) {
+        if (Math.random() > 0.4) {
+          const seat = new THREE.Mesh(
+            new THREE.BoxGeometry(0.55, 0.45, 0.35),
+            new THREE.MeshLambertMaterial({
+              color: accentColors[Math.floor(Math.random() * accentColors.length)]
+            })
+          );
+          seat.position.set(
+            col * 1.35 + (Math.random() - 0.5) * 0.4,
+            yOffset + rowHeight / 2 + 0.22,
+            zOffset + (Math.random() - 0.5) * 0.6
+          );
+          scene.add(seat);
+        }
+      }
+    }
+  });
+
+  // Kale arkası tribünleri (kısa kenarlar)
+  [-1, 1].forEach(side => {
+    for (let row = 0; row < 3; row++) {
+      const stand = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 1.0, FIELD_D * 1.1),
+        new THREE.MeshLambertMaterial({ color: rowColors[row] })
+      );
+      stand.position.set(
+        side * (FIELD_W / 2 + 1.2 + row * 1.8),
+        0.5 + row * 1.0,
+        0
+      );
+      scene.add(stand);
+    }
+  });
+
+  // Kule/direk ışıkları (köşelerde)
+  [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx, sz]) => {
+    // Direk
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.22, 12, 10),
+      new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 50 })
+    );
+    pole.position.set(
+      sx * (FIELD_W / 2 + 3.5),
+      6,
+      sz * (FIELD_D / 2 + 4.5)
+    );
+    pole.castShadow = true;
+    scene.add(pole);
+
+    // Işık kafası
+    const lamp = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 0.35, 0.8),
+      new THREE.MeshPhongMaterial({ color: 0xffffee, emissive: 0x888844, shininess: 80 })
+    );
+    lamp.position.set(
+      sx * (FIELD_W / 2 + 3.5),
+      12.3,
+      sz * (FIELD_D / 2 + 4.5)
+    );
+    scene.add(lamp);
+
+    // Nokta ışık
+    const pt = new THREE.PointLight(0xfff8e0, 0.6, 30);
+    pt.position.set(
+      sx * (FIELD_W / 2 + 3.5),
+      12,
+      sz * (FIELD_D / 2 + 4.5)
+    );
+    scene.add(pt);
   });
 }
 
-function updateSlotUI(idx) {
-  const slotEl = document.getElementById(`slot-${idx}`);
-  slotEl.classList.add('loaded');
-  document.getElementById(`name-${idx}`).textContent = slotNames[idx];
-}
+buildStands();
 
-function switchSlot(idx) {
-  if (idx === activeSlot && slots[idx]) return;
-  activeSlot = idx;
-  updateVisibility();
-  document.querySelectorAll('.slot').forEach((s, i) => s.classList.toggle('active', i === idx));
-  document.getElementById('char-title').textContent =
-    slots[idx] ? slotNames[idx].toUpperCase() : 'Karakter Görüntüleyici';
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  DOSYA YÜKLEME
-// ════════════════════════════════════════════════════════════════════════════
-function handleFile(file, slotIdx) {
-  if (!file || !/\.(glb|gltf)$/i.test(file.name)) {
-    alert('Lütfen .glb veya .gltf dosyası seçin.');
-    return;
-  }
-  const url = URL.createObjectURL(file);
-  loadGLB(url, file.name, slotIdx !== undefined ? slotIdx : pendingSlot);
-}
-
-// Dosya seç butonu
-document.getElementById('browse-btn').addEventListener('click', () => {
-  pendingSlot = activeSlot;
-  document.getElementById('file-input').click();
-});
-
-document.getElementById('file-input').addEventListener('change', (e) => {
-  if (e.target.files[0]) handleFile(e.target.files[0], pendingSlot);
-  e.target.value = '';
-});
-
-// Slot'a özel dosya açma
-window.openFileForSlot = function(idx, event) {
-  event.stopPropagation();
-  pendingSlot = idx;
-  const inp = document.getElementById('file-input');
-  inp.click();
-};
-
-// Drop zone kutu tıklanabilir
-document.getElementById('drop-box').addEventListener('click', () => {
-  pendingSlot = activeSlot;
-  document.getElementById('file-input').click();
-});
-
-// ── Sürükle-Bırak (overlay üzerinde) ─────────────────────────────────────
-const overlay = document.getElementById('drop-overlay');
-const dropBox = document.getElementById('drop-box');
-
-['dragenter','dragover'].forEach(ev =>
-  document.body.addEventListener(ev, (e) => {
-    e.preventDefault();
-    document.body.classList.add('dragging-file');
-    if (overlay.classList.contains('hidden')) overlay.classList.remove('hidden');
-    dropBox.classList.add('drag-over');
-  })
+// ── ZEMIN IZGARA (kale arkası, sahanın dışı) ────────────────────────
+const groundExt = new THREE.Mesh(
+  new THREE.BoxGeometry(FIELD_W * 2.2, 0.20, FIELD_D * 3.5),
+  new THREE.MeshLambertMaterial({ color: 0x0f1e0f })
 );
-['dragleave','dragend'].forEach(ev =>
-  document.body.addEventListener(ev, (e) => {
-    if (e.relatedTarget === null || !document.body.contains(e.relatedTarget)) {
-      document.body.classList.remove('dragging-file');
-      dropBox.classList.remove('drag-over');
-    }
-  })
-);
-document.body.addEventListener('drop', (e) => {
-  e.preventDefault();
-  document.body.classList.remove('dragging-file');
-  dropBox.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) handleFile(file, activeSlot);
-});
+groundExt.position.y = -0.12;
+groundExt.receiveShadow = true;
+scene.add(groundExt);
 
-// ════════════════════════════════════════════════════════════════════════════
-//  OTO DÖNDÜRME
-// ════════════════════════════════════════════════════════════════════════════
-let autoRot = true, lastInteract = 0;
-controls.addEventListener('start', () => { autoRot = false; lastInteract = Date.now(); });
-controls.addEventListener('end',   () => { lastInteract = Date.now(); });
-
-// ════════════════════════════════════════════════════════════════════════════
-//  ANİMASYON
-// ════════════════════════════════════════════════════════════════════════════
+// ── RENDER DÖNGÜSÜ ───────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
-  if (!autoRot && Date.now() - lastInteract > 3500) autoRot = true;
-  const active = slots[activeSlot];
-  if (active && autoRot) active.rotation.y += 0.006;
-  controls.update();
+  orbit.update();
   renderer.render(scene, camera);
 }
 animate();

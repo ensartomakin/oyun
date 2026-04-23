@@ -874,9 +874,10 @@ function updateHuman(p, dt) {
   else if (keys['ArrowRight']) { p.vx =  PLAYER_SPD; p.faceLeft = false; }
   else                          { p.vx *= Math.pow(0.001, dt); } // dt-tabanlı anlık dur
 
-  // Derinlik — sadece aşağı ok
-  if (keys['ArrowDown']) p.vz =  PLAYER_SPD * 0.55;
-  else                   p.vz *= Math.pow(0.001, dt);
+  // Derinlik — aşağı ileri, yukarı geri (zıplama keydown'da ayrı)
+  if      (keys['ArrowDown']) p.vz =  PLAYER_SPD * 0.55;
+  else if (keys['ArrowUp'])   p.vz = -PLAYER_SPD * 0.55;
+  else                         p.vz *= Math.pow(0.001, dt);
 }
 
 // ── YAPAY ZEKA — 1v1 ─────────────────────────────────────────────────

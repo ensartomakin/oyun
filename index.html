@@ -75,7 +75,7 @@
   position:fixed; top:62px; right:12px; font:bold 11px monospace;
   color:#ffee44; background:rgba(0,0,0,0.7); padding:3px 8px;
   border-radius:4px; z-index:60; pointer-events:none;
-">v2.5</div>
+">v2.6</div>
 
 <!-- Canlı debug paneli -->
 <div id="dbg" style="
@@ -927,6 +927,34 @@ function updateAI(p, dt) {
   }
 }
 
+// ── DRIBLE — top ayakta sürme ────────────────────────────────────────
+const DRIBBLE_R = 0.62; // temas yarıçapı
+
+function checkDribble(p) {
+  if (p.kickCooldown > 0) return;      // vuruş bekleme süresinde dribble yok
+  if (ball.y > 1.1) return;            // top havada, sürme olmaz
+
+  const dx   = ball.x - p.x;
+  const dz   = ball.z - p.z;
+  const flatD = Math.sqrt(dx * dx + dz * dz);
+  if (flatD > DRIBBLE_R) return;
+
+  const pSpd = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+  const nx   = dx / Math.max(flatD, 0.01);
+  const nz   = dz / Math.max(flatD, 0.01);
+
+  if (pSpd > 0.4) {
+    // Hareket halinde: topu oyuncunun önünde sür
+    ball.vx = p.vx * 0.82 + nx * 2.2;
+    ball.vz = p.vz * 0.82 + nz * 2.2;
+    ball.vy = Math.max(ball.vy, 1.0);  // hafif sekme
+  } else {
+    // Duruyorsa: topu yavaşlat (ayakta tut)
+    ball.vx *= 0.70;
+    ball.vz *= 0.70;
+  }
+}
+
 // ── OYUNCU FİZİĞİ + ANİMASYON ───────────────────────────────────────
 function updatePlayer(p, dt) {
   if (p.kickCooldown > 0) p.kickCooldown -= dt;
@@ -1072,6 +1100,7 @@ function animate() {
     if (p.isHuman) updateHuman(p, dt);
     else           updateAI(p, dt);
     updatePlayer(p, dt);
+    checkDribble(p);
   });
 
   // Top + timer

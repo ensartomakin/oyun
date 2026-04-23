@@ -3,29 +3,77 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kafa Topu 3D — Faz 1B</title>
+  <title>Kafa Topu 3D — Faz 1C</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #0b1a2e; font-family: 'Segoe UI', sans-serif; }
     #c { display: block; width: 100vw; height: 100vh; }
-    #phase-tag {
-      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12);
-      padding: 6px 18px; border-radius: 20px;
-      font-size: 0.72rem; letter-spacing: 0.14em;
-      color: rgba(255,255,255,0.55); pointer-events: none;
+
+    /* ── SKOR ÇUBUĞU ── */
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0; height: 58px;
+      display: flex; align-items: center; justify-content: center; gap: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.78), transparent);
+      pointer-events: none; z-index: 20;
     }
+    .hud-team {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 22px;
+    }
+    .hud-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink:0; }
+    .hud-name { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em;
+                text-transform: uppercase; color: rgba(255,255,255,0.65); }
+    .hud-score{ font-size: 2.2rem; font-weight: 900; color: #fff; min-width: 28px;
+                text-align: center; line-height: 1; }
+    #hud-mid  { display: flex; flex-direction: column; align-items: center;
+                padding: 0 20px; }
+    #hud-timer{ font-size: 1.65rem; font-weight: 800; color: #fff; line-height: 1; }
+    #hud-timer.warn { color: #FF4422; }
+    #hud-label{ font-size: 0.58rem; color: rgba(255,255,255,0.38);
+                letter-spacing: 0.14em; margin-top: 2px; }
+
+    /* ── KONTROL İPUCU ── */
     #hint {
       position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
-      font-size: 0.62rem; color: rgba(255,255,255,0.28);
-      letter-spacing: 0.1em; pointer-events: none;
+      font-size: 0.60rem; color: rgba(255,255,255,0.28);
+      letter-spacing: 0.09em; pointer-events: none; text-align: center;
     }
+
+    /* ── YENİDEN OYNA ── */
+    #btn-restart {
+      display: none; position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, 72px);
+      padding: 13px 42px; border-radius: 14px; border: none;
+      background: #2255FF; color: #fff; font-size: 1rem;
+      font-weight: 700; cursor: pointer; z-index: 35; letter-spacing: 0.06em;
+    }
+    #btn-restart:hover { background: #3366FF; }
   </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="phase-tag">FAZ 1B — TOP FİZİĞİ · SEKME · GOL TESPİTİ</div>
-<div id="hint">SÜRÜKLE · DÖNDÜR · YAKLAŞTIR &nbsp;|&nbsp; R = Topu sıfırla</div>
+<!-- SKOR HUD -->
+<div id="hud">
+  <div class="hud-team">
+    <div class="hud-dot" style="background:#3366FF"></div>
+    <span class="hud-name">MAVİ</span>
+    <span class="hud-score" id="score-a">0</span>
+  </div>
+  <div id="hud-mid">
+    <div id="hud-timer">3:00</div>
+    <div id="hud-label">MAÇ SÜRESİ</div>
+  </div>
+  <div class="hud-team">
+    <span class="hud-score" id="score-b">0</span>
+    <span class="hud-name">KIRMIZI</span>
+    <div class="hud-dot" style="background:#FF3322"></div>
+  </div>
+</div>
+
+<div id="hint">
+  ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA &nbsp;|&nbsp; SPACE TEKMELE &nbsp;|&nbsp; Faz 2'de: X RÖVEŞATA · Z KAYMA · C KAFA · ENTER ŞUT
+</div>
+<button id="btn-restart" onclick="restartMatch()">YENİDEN OYNA</button>
 
 <!-- GOL mesajı -->
 <div id="goal-msg" style="
@@ -90,15 +138,9 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
 });
 
-// Geliştirme sırasında orbit kontrolü (Faz 1B'de kaldırılacak)
-const orbit = new THREE.OrbitControls(camera, renderer.domElement);
-orbit.target.set(0, 2, 0);
-orbit.enableDamping = true;
-orbit.dampingFactor = 0.07;
-orbit.minDistance   = 4;
-orbit.maxDistance   = 40;
-orbit.maxPolarAngle = Math.PI * 0.82;
-orbit.update();
+// Faz 1C: sabit oyun kamerası (OrbitControls kaldırıldı)
+camera.position.set(0, 8, 20);
+camera.lookAt(0, 2, 0);
 
 // ── IŞIKLAR ─────────────────────────────────────────────────────────
 
@@ -624,23 +666,316 @@ function updateBallPhysics(dt) {
   ballShadowMesh.scale.setScalar(shadowScale);
 }
 
-// ── KLAVYE: R = topu sıfırla ─────────────────────────────────────────
-window.addEventListener('keydown', e => {
-  if (e.code === 'KeyR') resetBall();
-});
+// ════════════════════════════════════════════════════════════════════
+//  FAZ 1C — OYUNCULAR · HAREKET · YAPAY ZEKA · SKOR · TIMER
+// ════════════════════════════════════════════════════════════════════
 
-// ── RENDER DÖNGÜSÜ ───────────────────────────────────────────────────
+const PLAYER_SPD  = 5.6;
+const PLAYER_JUMP = 13.5;
+const KICK_RANGE  = 0.85;
+const KICK_PWR    = 13;
+const GAME_SECS   = 180;
+
+// ── OYUNCU MESH (kafa topu stili: büyük kafa) ────────────────────────
+function makePlayerMesh(teamColor) {
+  const g = new THREE.Group();
+  const C = teamColor;
+  const phong = (c, sh) => new THREE.MeshPhongMaterial({ color: c, shininess: sh || 35 });
+
+  // Gövde
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.26, 0.68, 14), phong(C));
+  body.position.y = 0.34; body.castShadow = true; g.add(body);
+
+  // Büyük kafa
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 22, 22), phong(C, 45));
+  head.position.y = 1.03; head.castShadow = true; g.add(head);
+
+  // Gözler
+  [-0.17, 0.17].forEach(x => {
+    const ew = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), phong(0xffffff, 60));
+    ew.position.set(x, 1.09, 0.38); ew.scale.z = 0.55; g.add(ew);
+    const ep = new THREE.Mesh(new THREE.SphereGeometry(0.046, 8, 8), phong(0x111111, 80));
+    ep.position.set(x, 1.09, 0.43); g.add(ep);
+  });
+
+  // Bacaklar + ayakkabı
+  [-0.14, 0.14].forEach(x => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.08, 0.50, 10), phong(C));
+    leg.position.set(x, -0.09, 0); leg.castShadow = true; g.add(leg);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.09, 0.28), phong(0x111111));
+    shoe.position.set(x, -0.37, 0.05); g.add(shoe);
+  });
+
+  return g;
+}
+
+// Oyuncu zemin gölgesi
+function makePlayerShadow() {
+  const m = new THREE.Mesh(
+    new THREE.CircleGeometry(0.28, 14),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = 0.004;
+  scene.add(m);
+  return m;
+}
+
+// ── OYUNCU DURUMU ────────────────────────────────────────────────────
+const TEAM_COLORS = [0x2255FF, 0xFF2211];
+
+// Başlangıç konumları
+const SPAWN = [
+  { x: -3.5, z:  0.7 }, // Mavi 1 (İnsan)
+  { x: -6.5, z: -0.7 }, // Mavi 2 (YZ)
+  { x:  3.5, z:  0.7 }, // Kırmızı 1 (YZ)
+  { x:  6.5, z: -0.7 }, // Kırmızı 2 (YZ)
+];
+
+let players = [];
+
+function createPlayers() {
+  players.forEach(p => { scene.remove(p.mesh); scene.remove(p.shadow); });
+  players = SPAWN.map((sp, i) => {
+    const team  = i < 2 ? 0 : 1;
+    const mesh  = makePlayerMesh(TEAM_COLORS[team]);
+    const shad  = makePlayerShadow();
+    mesh.position.set(sp.x, 0, sp.z);
+    scene.add(mesh);
+    return {
+      team, idx: i,
+      isHuman: i === 0,       // Sadece P0 insan
+      x: sp.x, y: 0, z: sp.z,
+      vx: 0, vy: 0, vz: 0,
+      onGround: true,
+      kickCooldown: 0,
+      faceLeft: team === 1,
+      mesh, shadow: shad,
+      spawnX: sp.x, spawnZ: sp.z
+    };
+  });
+}
+
+function spawnPlayers() {
+  players.forEach(p => {
+    p.x = p.spawnX; p.y = 0; p.z = p.spawnZ;
+    p.vx = 0; p.vy = 0; p.vz = 0;
+    p.onGround = true; p.kickCooldown = 0;
+  });
+}
+
+// ── GİRİŞ ────────────────────────────────────────────────────────────
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  const prevent = ['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  if (prevent.includes(e.code)) e.preventDefault();
+
+  if (!matchActive) return;
+  const p = players[0];
+
+  if (e.code === 'ArrowUp' && p.onGround) {
+    p.vy = PLAYER_JUMP; p.onGround = false;
+  }
+  if (e.code === 'Space') kickAction(p);
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function kickAction(p) {
+  if (p.kickCooldown > 0) return;
+  const dx = ball.x - p.x;
+  const dy = ball.y - (p.y + 0.9);
+  const dz = ball.z - p.z;
+  const d  = Math.sqrt(dx * dx + dy * dy * 0.5 + dz * dz);
+  if (d > KICK_RANGE) return;
+
+  const goalX = p.team === 0 ? FIELD_W / 2 : -FIELD_W / 2;
+  const toGoalX = goalX - ball.x;
+  const len     = Math.sqrt(toGoalX * toGoalX + 0.01);
+
+  ball.vx = (toGoalX / len) * KICK_PWR;
+  ball.vy = 5.5 + Math.random() * 2.5;
+  ball.vz = -ball.z * 0.9;
+  p.kickCooldown = 0.35;
+}
+
+// ── İNSAN HAREKETİ ───────────────────────────────────────────────────
+function updateHuman(p, dt) {
+  if (keys['ArrowLeft'])       { p.vx = -PLAYER_SPD; p.faceLeft = true;  }
+  else if (keys['ArrowRight']) { p.vx =  PLAYER_SPD; p.faceLeft = false; }
+  else                         { p.vx *= 0.70; }
+
+  // İleri/geri (Z ekseninde kısıtlı)
+  if (keys['ArrowDown'])       p.vz =  PLAYER_SPD * 0.50;
+  else if (keys['ArrowUp'] && !p.onGround) { /* havada Z hareketi yok */ }
+  else if (p.onGround)         p.vz *= 0.70;
+}
+
+// ── YAPAY ZEKA ───────────────────────────────────────────────────────
+function updateAI(p, dt) {
+  const isForward = (p.idx === 1 && p.team === 0) || (p.idx === 2 && p.team === 1)
+                    ? false : true;
+  // Forvet → topa git, Defans → yarı sahayı koru
+  const ownGoalX  = p.team === 0 ? -FIELD_W / 2 : FIELD_W / 2;
+  const targetX   = isForward
+    ? ball.x
+    : ball.x * 0.35 + ownGoalX * 0.65;
+  const targetZ   = ball.z * 0.40;
+
+  const dx = targetX - p.x;
+  const dz = targetZ - p.z;
+
+  p.vx = Math.sign(dx) * Math.min(Math.abs(dx) * 2.6, PLAYER_SPD * 0.92);
+  p.vz = Math.sign(dz) * Math.min(Math.abs(dz) * 1.8, PLAYER_SPD * 0.45);
+  p.faceLeft = p.vx < 0;
+
+  // Zıpla: top havadaysa ve yakındaysa
+  if (p.onGround) {
+    const d2 = Math.sqrt((ball.x - p.x) ** 2 + (ball.z - p.z) ** 2);
+    if (d2 < 2.2 && ball.y > 0.9) { p.vy = PLAYER_JUMP * 0.88; p.onGround = false; }
+  }
+
+  // YZ vuruşu
+  if (p.kickCooldown <= 0) {
+    const dx2 = ball.x - p.x, dy2 = ball.y - (p.y + 0.9), dz2 = ball.z - p.z;
+    const d   = Math.sqrt(dx2 * dx2 + dy2 * dy2 * 0.5 + dz2 * dz2);
+    if (d < KICK_RANGE) {
+      const goalX   = p.team === 0 ? FIELD_W / 2 : -FIELD_W / 2;
+      ball.vx       = Math.sign(goalX - ball.x) * (KICK_PWR * 0.9);
+      ball.vy       = 5 + Math.random() * 3;
+      ball.vz       = -ball.z * 0.7;
+      p.kickCooldown = 0.55;
+    }
+  }
+}
+
+// ── OYUNCU FİZİĞİ ────────────────────────────────────────────────────
+function updatePlayer(p, dt) {
+  if (p.kickCooldown > 0) p.kickCooldown -= dt;
+
+  p.vy += GRAVITY * dt;
+  p.x  += p.vx * dt;
+  p.y  += p.vy * dt;
+  p.z  += p.vz * dt;
+
+  // Zemin
+  if (p.y <= 0) { p.y = 0; p.vy = 0; p.onGround = true; p.vz *= 0.6; }
+
+  // X sınırları
+  const PX = FIELD_W / 2 - 0.3;
+  p.x = Math.max(-PX, Math.min(PX, p.x));
+  // Z sınırları
+  const PZ = FIELD_D / 2 - 0.4;
+  p.z = Math.max(-PZ, Math.min(PZ, p.z));
+
+  // Mesh güncelle
+  p.mesh.position.set(p.x, p.y, p.z);
+  const targetRY = p.faceLeft ? Math.PI : 0;
+  p.mesh.rotation.y += (targetRY - p.mesh.rotation.y) * 0.22;
+  // Havada hafif eğilme
+  p.mesh.rotation.z = p.onGround ? 0 : p.vx * 0.038;
+
+  // Gölge
+  p.shadow.position.x = p.x;
+  p.shadow.position.z = p.z;
+  p.shadow.material.opacity = 0.22 * (1 - Math.min(p.y / 5, 1) * 0.7);
+}
+
+// ── MAÇ YÖNETİMİ ─────────────────────────────────────────────────────
+let score       = [0, 0];
+let timeLeft    = GAME_SECS;
+let matchActive = false;
+let waitTimer   = 0;
+
+const elScoreA  = document.getElementById('score-a');
+const elScoreB  = document.getElementById('score-b');
+const elTimer   = document.getElementById('hud-timer');
+const elGoalMsg = document.getElementById('goal-msg');
+const elRestart = document.getElementById('btn-restart');
+
+function startMatch() {
+  score = [0, 0]; timeLeft = GAME_SECS; matchActive = false;
+  elScoreA.textContent = '0'; elScoreB.textContent = '0';
+  elRestart.style.display = 'none';
+  elTimer.classList.remove('warn');
+  spawnPlayers();
+  resetBall();
+  waitTimer = 2.2; // kick-off bekleme süresi
+}
+window.restartMatch = startMatch;
+
+function onGoal(scoringTeam) {
+  if (!matchActive) return;
+  matchActive = false;
+  score[scoringTeam]++;
+  (scoringTeam === 0 ? elScoreA : elScoreB).textContent = score[scoringTeam];
+
+  elGoalMsg.style.display = 'block';
+  elGoalMsg.style.animation = 'none';
+  void elGoalMsg.offsetWidth;
+  elGoalMsg.style.animation = 'goalPop 0.25s ease-out';
+
+  setTimeout(() => {
+    elGoalMsg.style.display = 'none';
+    if (timeLeft > 0) {
+      spawnPlayers(); resetBall(); waitTimer = 1.8;
+    }
+  }, 2200);
+}
+
+// triggerGoal'u üzerine yaz
+function triggerGoal(t) { onGoal(t); }
+
+function updateTimer(dt) {
+  if (!matchActive) return;
+  timeLeft -= dt;
+  if (timeLeft <= 0) {
+    timeLeft = 0; matchActive = false;
+    const w = score[0] > score[1] ? 'MAVİ KAZANDI! 🏆'
+            : score[1] > score[0] ? 'KIRMIZI KAZANDI! 🏆'
+            : 'BERABERLİK!';
+    elGoalMsg.textContent = w;
+    elGoalMsg.style.display = 'block';
+    elGoalMsg.style.color   = score[0] === score[1] ? '#ffffff' : '#FFD700';
+    elRestart.style.display = 'block';
+    return;
+  }
+  const m = Math.floor(timeLeft / 60);
+  const s = Math.floor(timeLeft % 60);
+  elTimer.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+  elTimer.classList.toggle('warn', timeLeft < 30);
+}
+
+// ── BAŞLAT ────────────────────────────────────────────────────────────
+createPlayers();
+startMatch();
+
+// ── ANA DÖNGÜ ─────────────────────────────────────────────────────────
 let prevTime = performance.now();
 
 function animate() {
   requestAnimationFrame(animate);
-
   const now = performance.now();
-  const dt  = Math.min((now - prevTime) / 1000, 0.05); // max 50ms adım
+  const dt  = Math.min((now - prevTime) / 1000, 0.05);
   prevTime  = now;
 
+  // Kick-off bekleme
+  if (waitTimer > 0) {
+    waitTimer -= dt;
+    if (waitTimer <= 0) { waitTimer = 0; matchActive = true; }
+  }
+
+  // Oyuncu güncellemeleri
+  players.forEach(p => {
+    if (p.isHuman) updateHuman(p, dt);
+    else           updateAI(p, dt);
+    updatePlayer(p, dt);
+  });
+
+  // Top + timer
   updateBallPhysics(dt);
-  orbit.update();
+  updateTimer(dt);
+
   renderer.render(scene, camera);
 }
 animate();

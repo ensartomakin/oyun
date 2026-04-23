@@ -49,9 +49,68 @@
     }
     #btn-restart:hover { background: #3366FF; }
 
+    /* ── YÜKLEME EKRANI ── */
+    #loading {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      background: radial-gradient(ellipse at center, #0e2040 0%, #050d1a 100%);
+      z-index: 300;
+    }
+    #loading h2 { font-size: 1.5rem; color: #fff; font-weight: 800; letter-spacing: 0.1em; }
+    #load-bar-bg {
+      width: 280px; height: 8px; background: rgba(255,255,255,0.12);
+      border-radius: 4px; overflow: hidden;
+    }
+    #load-bar { height: 100%; width: 0%; background: linear-gradient(90deg,#2255ff,#44aaff);
+                border-radius: 4px; transition: width 0.25s; }
+    #loading .load-txt { font-size: 0.68rem; color: rgba(255,255,255,0.38); letter-spacing: 0.12em; }
+
+    /* ── KARAKTER SEÇİM EKRANI ── */
+    #char-select {
+      display: none; position: fixed; inset: 0; flex-direction: column;
+      align-items: center; justify-content: center; gap: 22px;
+      background: radial-gradient(ellipse at center, #0e2040 0%, #050d1a 100%);
+      z-index: 200;
+    }
+    #char-select h1 { font-size: 2.8rem; font-weight: 900; color: #fff;
+                      text-shadow: 0 0 40px rgba(80,140,255,0.7); letter-spacing: 0.06em; }
+    #char-select .cs-sub { font-size: 0.78rem; color: rgba(255,255,255,0.38);
+                           letter-spacing: 0.16em; }
+    .cs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .cs-card {
+      width: 155px; padding: 20px 14px 16px; border-radius: 18px;
+      border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05);
+      cursor: pointer; text-align: center; transition: all .18s; user-select: none;
+    }
+    .cs-card:hover { border-color: rgba(100,160,255,0.45); background: rgba(100,160,255,0.08);
+                     transform: translateY(-3px); }
+    .cs-card.selected {
+      border-color: #2255ff; background: rgba(34,85,255,0.20);
+      box-shadow: 0 0 22px rgba(34,85,255,0.45); transform: translateY(-3px);
+    }
+    .cs-card.selected .cs-badge { background: #2255ff; color: #fff; }
+    .cs-icon  { font-size: 2.6rem; margin-bottom: 9px; display: block; }
+    .cs-name  { font-size: 0.74rem; font-weight: 700; color: #fff;
+                letter-spacing: 0.06em; margin-bottom: 10px; }
+    .cs-badge {
+      display: inline-block; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.12em;
+      padding: 3px 10px; border-radius: 20px;
+      background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.45); transition: all .18s;
+    }
+    #cs-counter { font-size: 0.72rem; color: rgba(255,255,255,0.45); letter-spacing: 0.1em; }
+    #cs-play-btn {
+      padding: 13px 50px; border-radius: 16px; border: none;
+      font-size: 1rem; font-weight: 800; cursor: pointer; letter-spacing: 0.08em;
+      transition: transform .12s, box-shadow .12s, opacity .18s;
+      background: linear-gradient(135deg,#2255ff,#44aaff); color: #fff;
+      opacity: 0.32; pointer-events: none;
+    }
+    #cs-play-btn.ready { opacity: 1; pointer-events: auto; }
+    #cs-play-btn.ready:hover { transform: scale(1.05); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+
     /* ── ANA MENÜ ── */
     #menu {
-      position: fixed; inset: 0; display: flex; flex-direction: column;
+      position: fixed; inset: 0; display: none; flex-direction: column;
       align-items: center; justify-content: center; gap: 18px;
       background: radial-gradient(ellipse at center, #0e2040 0%, #050d1a 100%);
       z-index: 100;
@@ -88,6 +147,26 @@
   </style>
 </head>
 <body>
+<!-- YÜKLEME EKRANI -->
+<div id="loading">
+  <h2>⚽ KAFA TOPU 3D</h2>
+  <div id="load-bar-bg"><div id="load-bar"></div></div>
+  <div class="load-txt" id="load-txt">KARAKTERler YÜKLENİYOR…</div>
+</div>
+
+<!-- KARAKTER SEÇİM EKRANI -->
+<div id="char-select">
+  <h1>⚽ KAFA TOPU 3D</h1>
+  <div class="cs-sub">TAKIMINİ SEÇ — 2 KARAKTER SEÇ</div>
+  <div class="cs-grid" id="cs-grid"></div>
+  <div id="cs-counter">0 / 2 seçildi</div>
+  <button id="cs-play-btn" onclick="startWithSelectedChars()">OYNA ▶</button>
+  <div style="font-size:0.58rem;color:rgba(255,255,255,0.22);letter-spacing:0.1em;text-align:center">
+    ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA &nbsp;|&nbsp; ↓ DERİNLİK<br>
+    ENTER ŞUT &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA &nbsp;|&nbsp; SPACE PAS
+  </div>
+</div>
+
 <!-- ANA MENÜ -->
 <div id="menu">
   <h1>⚽ KAFA TOPU 3D</h1>
@@ -158,6 +237,7 @@
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════
 //  FAZ 1A — SAHA, IŞIK, KAMERA, TRİBÜN
@@ -784,6 +864,126 @@ function makePlayerShadow() {
   return m;
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  KARAKTER SİSTEMİ — GLB YÜKLEYİCİ + SEÇİM
+// ════════════════════════════════════════════════════════════════════
+
+const CHARACTERS = [
+  { id: 0, name: 'Beşiktaş Hero', file: 'Meshy_AI_Beşiktaş_Hero_0423200404_texture.glb',  icon: '⚽' },
+  { id: 1, name: 'Harry',         file: 'Meshy_AI_Harry_0423113026_texture.glb',            icon: '🧙' },
+  { id: 2, name: 'K Heart',       file: 'Meshy_AI_K_Heart_0423131233_texture.glb',          icon: '💜' },
+  { id: 3, name: 'Little Batman', file: 'Meshy_AI_Little_Batman_0423120145_texture.glb',    icon: '🦇' },
+];
+
+const loadedModels = {};   // id → THREE.Group (orjinal, klonlanmak için)
+const charMeta     = {};   // id → { markerY }
+let selectedCharIds = [];  // kullanıcının seçtiği 2 karakter id'si
+// slot → charId: [myChar0, myChar1, enemyChar0, enemyChar1]
+let charAssignment = [0, 1, 2, 3];
+
+// ── UI: karakter kartlarını oluştur ──────────────────────────────────
+function buildCharSelectUI() {
+  const grid = document.getElementById('cs-grid');
+  grid.innerHTML = '';
+  CHARACTERS.forEach(ch => {
+    const card = document.createElement('div');
+    card.className = 'cs-card';
+    card.id = `cs-card-${ch.id}`;
+    card.innerHTML = `
+      <span class="cs-icon">${ch.icon}</span>
+      <div class="cs-name">${ch.name}</div>
+      <div class="cs-badge" id="cs-badge-${ch.id}">SEÇ</div>`;
+    card.onclick = () => toggleChar(ch.id);
+    grid.appendChild(card);
+  });
+}
+
+function toggleChar(id) {
+  const idx = selectedCharIds.indexOf(id);
+  if (idx >= 0) {
+    selectedCharIds.splice(idx, 1);
+  } else {
+    if (selectedCharIds.length >= 2) return;
+    selectedCharIds.push(id);
+  }
+  updateCharSelectUI();
+}
+
+function updateCharSelectUI() {
+  CHARACTERS.forEach(ch => {
+    const card  = document.getElementById(`cs-card-${ch.id}`);
+    const badge = document.getElementById(`cs-badge-${ch.id}`);
+    const sel   = selectedCharIds.includes(ch.id);
+    card.classList.toggle('selected', sel);
+    badge.textContent = sel ? '✔ SEÇİLDİ' : 'SEÇ';
+  });
+  const n = selectedCharIds.length;
+  document.getElementById('cs-counter').textContent = `${n} / 2 seçildi`;
+  const btn = document.getElementById('cs-play-btn');
+  btn.classList.toggle('ready', n === 2);
+}
+
+// ── GLB Önyükleme ────────────────────────────────────────────────────
+async function preloadAll() {
+  const loader  = new THREE.GLTFLoader();
+  const bar     = document.getElementById('load-bar');
+  const loadTxt = document.getElementById('load-txt');
+  let loaded = 0;
+
+  await Promise.all(CHARACTERS.map(ch => new Promise((resolve) => {
+    loader.load(
+      encodeURI(ch.file),
+      gltf => {
+        const model = gltf.scene;
+        model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
+
+        // Bounding box hesapla (yüklendikten hemen sonra, scale=1)
+        const rawBox = new THREE.Box3().setFromObject(model);
+        const rawH   = rawBox.max.y - rawBox.min.y;
+        const s      = 1.6 / Math.max(rawH, 0.01);  // 1.6 birim hedef yükseklik
+        model.scale.setScalar(s);
+
+        // Altı zemine oturt
+        const scaledBox = new THREE.Box3().setFromObject(model);
+        model.position.y = -scaledBox.min.y;
+
+        const charH = scaledBox.max.y - scaledBox.min.y;
+        charMeta[ch.id] = { markerY: charH + 0.35 };
+        loadedModels[ch.id] = model;
+
+        loaded++;
+        if (bar) bar.style.width = (loaded / CHARACTERS.length * 100) + '%';
+        if (loadTxt) loadTxt.textContent = `${ch.name} yüklendi (${loaded}/${CHARACTERS.length})`;
+        resolve();
+      },
+      undefined,
+      err => { console.warn('GLB yükleme hatası:', ch.file, err); loaded++; resolve(); }
+    );
+  })));
+
+  // Yükleme bitti — karakter seçim ekranına geç
+  buildCharSelectUI();
+  document.getElementById('loading').style.display    = 'none';
+  document.getElementById('char-select').style.display = 'flex';
+}
+
+// ── Seçimden oyuna başla ─────────────────────────────────────────────
+window.startWithSelectedChars = function() {
+  if (selectedCharIds.length < 2) return;
+  const enemyIds = CHARACTERS.filter(c => !selectedCharIds.includes(c.id)).map(c => c.id);
+  charAssignment = [selectedCharIds[0], selectedCharIds[1], enemyIds[0], enemyIds[1]];
+  document.getElementById('char-select').style.display = 'none';
+  createPlayers();
+  startMatch();
+};
+
+// ── Takım üçgen işareti ─────────────────────────────────────────────
+function makeTeamMarker(teamColor) {
+  const geo = new THREE.ConeGeometry(0.13, 0.24, 3);
+  const mat = new THREE.MeshBasicMaterial({ color: teamColor });
+  return new THREE.Mesh(geo, mat);
+}
+
 // ── OYUNCU DURUMU ────────────────────────────────────────────────────
 const TEAM_COLORS = [0x2255FF, 0xFF2211];
 
@@ -800,22 +1000,40 @@ let players = [];
 function createPlayers() {
   players.forEach(p => { scene.remove(p.mesh); scene.remove(p.shadow); });
   players = SPAWN.map((sp, i) => {
-    const team  = i < 2 ? 0 : 1; // 2v2: 0-1 = mavi, 2-3 = kırmızı
-    const mesh  = makePlayerMesh(TEAM_COLORS[team]);
-    const shad  = makePlayerShadow();
-    mesh.position.set(sp.x, 0, sp.z);
-    scene.add(mesh);
+    const team   = i < 2 ? 0 : 1;
+    const charId = charAssignment[i];
+
+    // GLB grubunu klonla ve sahneye ekle
+    const group = new THREE.Group();
+    if (loadedModels[charId]) {
+      const model = loadedModels[charId].clone(true);
+      group.add(model);
+    } else {
+      // Fallback: eski geometri
+      group.add(makePlayerMesh(TEAM_COLORS[team]));
+    }
+
+    // Takım rengi üçgen
+    const marker = makeTeamMarker(TEAM_COLORS[team]);
+    const mY = charMeta[charId] ? charMeta[charId].markerY : 2.0;
+    marker.position.y = mY;
+    group.add(marker);
+
+    group.position.set(sp.x, 0, sp.z);
+    scene.add(group);
+
+    const shad = makePlayerShadow();
     return {
       team, idx: i,
-      isHuman: i === 0, // sadece oyuncu 0 insan
+      isHuman: i === 0,
       x: sp.x, y: 0, z: sp.z,
       vx: 0, vy: 0, vz: 0,
       onGround: true,
       kickCooldown: 0,
       faceLeft: team === 1,
-      state: 'idle',      // 'idle' | 'bicycle' | 'slide' | 'header' | 'shot'
+      state: 'idle',
       stateTimer: 0,
-      mesh, shadow: shad,
+      mesh: group, shadow: shad,
       spawnX: sp.x, spawnZ: sp.z
     };
   });
@@ -1089,8 +1307,7 @@ function updatePlayer(p, dt) {
   p.x = Math.max(-PX, Math.min(PX, p.x));
   p.z = Math.max(-PZ, Math.min(PZ, p.z));
 
-  // Mesh konum — +0.42 ile ayaklar zemine oturur
-  p.mesh.position.set(p.x, p.y + 0.42, p.z);
+  p.mesh.position.set(p.x, p.y, p.z);
   const targetRY = p.faceLeft ? Math.PI : 0;
   p.mesh.rotation.y += (targetRY - p.mesh.rotation.y) * 0.22;
 
@@ -1134,11 +1351,7 @@ const elGoalMsg = document.getElementById('goal-msg');
 const elRestart = document.getElementById('btn-restart');
 const elMenu    = document.getElementById('menu');
 
-// ── ANA MENÜ ──────────────────────────────────────────────────────
-window.startFromMenu = function() {
-  elMenu.style.display = 'none';
-  startMatch();
-};
+window.startFromMenu = function() { /* artık kullanılmıyor */ };
 
 function startMatch() {
   score = [0, 0]; timeLeft = GAME_SECS; matchActive = false;
@@ -1151,7 +1364,14 @@ function startMatch() {
   resetBall();
   waitTimer = 2.2;
 }
-window.restartMatch = function() { elMenu.style.display = 'none'; startMatch(); };
+
+// Aynı karakterlerle tekrar oyna (karakter seçimine dönmez)
+window.restartMatch = function() {
+  elGoalMsg.style.display = 'none';
+  elRestart.style.display = 'none';
+  createPlayers();
+  startMatch();
+};
 
 // ── KONFETI PARTİKELİ ─────────────────────────────────────────────
 function spawnConfetti(x, y) {
@@ -1216,8 +1436,8 @@ function updateTimer(dt) {
 }
 
 // ── BAŞLAT ────────────────────────────────────────────────────────────
-createPlayers();
-startMatch();
+// Tüm GLB'leri önceden yükle → karakter seçim ekranını aç
+preloadAll();
 
 // ── ANA DÖNGÜ ─────────────────────────────────────────────────────────
 let prevTime = performance.now();

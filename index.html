@@ -125,12 +125,12 @@ scene.fog = new THREE.FogExp2(0x0b1a2e, 0.009);
 
 // ── KAMERA ──────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(
-  52,
+  62,
   window.innerWidth / window.innerHeight,
   0.1, 120
 );
-camera.position.set(0, 9, 22);
-camera.lookAt(0, 1, 0);
+camera.position.set(0, 7, 15);
+camera.lookAt(0, 1.5, 0);
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -139,8 +139,8 @@ window.addEventListener('resize', () => {
 });
 
 // Sabit oyun kamerası — saha görünür açı
-camera.position.set(0, 9, 22);
-camera.lookAt(0, 1, 0);
+camera.position.set(0, 7, 15);
+camera.lookAt(0, 1.5, 0);
 
 // ── IŞIKLAR ─────────────────────────────────────────────────────────
 
@@ -776,7 +776,8 @@ window.addEventListener('keydown', e => {
   if (!matchActive) return;
   const p = players[0];
 
-  if (e.code === 'ArrowUp' && p.onGround && p.state !== 'slide') {
+  // !e.repeat: tuş basılı tutulunca tekrar tetiklenmesin
+  if (e.code === 'ArrowUp' && p.onGround && p.state !== 'slide' && !e.repeat) {
     p.vy = PLAYER_JUMP; p.onGround = false;
   }
   if (e.code === 'KeyX')  doBicycleKick(p);
@@ -873,10 +874,9 @@ function updateHuman(p, dt) {
   else if (keys['ArrowRight']) { p.vx =  PLAYER_SPD; p.faceLeft = false; }
   else                          { p.vx *= Math.pow(0.001, dt); } // dt-tabanlı anlık dur
 
-  // İleri / Geri (derinlik — iki yön)
-  if      (keys['ArrowDown'])  p.vz =  PLAYER_SPD * 0.55;
-  else if (keys['ArrowUp'] && !p.onGround) p.vz = -PLAYER_SPD * 0.55; // havada geri
-  else                          p.vz *= Math.pow(0.001, dt);
+  // Derinlik — sadece aşağı ok
+  if (keys['ArrowDown']) p.vz =  PLAYER_SPD * 0.55;
+  else                   p.vz *= Math.pow(0.001, dt);
 }
 
 // ── YAPAY ZEKA — 1v1 ─────────────────────────────────────────────────
@@ -935,8 +935,8 @@ function updatePlayer(p, dt) {
   p.x = Math.max(-PX, Math.min(PX, p.x));
   p.z = Math.max(-PZ, Math.min(PZ, p.z));
 
-  // Mesh konum
-  p.mesh.position.set(p.x, p.y, p.z);
+  // Mesh konum — +0.42 ile ayaklar zemine oturur
+  p.mesh.position.set(p.x, p.y + 0.42, p.z);
   const targetRY = p.faceLeft ? Math.PI : 0;
   p.mesh.rotation.y += (targetRY - p.mesh.rotation.y) * 0.22;
 

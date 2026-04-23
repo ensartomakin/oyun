@@ -71,7 +71,7 @@
 </div>
 
 <div id="hint">
-  ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA &nbsp;|&nbsp; SPACE TEKMELE &nbsp;|&nbsp; Faz 2'de: X RÖVEŞATA · Z KAYMA · C KAFA · ENTER ŞUT
+  ← → ↑ HAREKET/ZIPLA &nbsp;|&nbsp; ENTER ŞUT &nbsp;|&nbsp; SPACE PAS &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA
 </div>
 <button id="btn-restart" onclick="restartMatch()">YENİDEN OYNA</button>
 
@@ -744,12 +744,14 @@ function createPlayers() {
     scene.add(mesh);
     return {
       team, idx: i,
-      isHuman: i === 0,       // Sadece P0 insan
+      isHuman: i === 0,
       x: sp.x, y: 0, z: sp.z,
       vx: 0, vy: 0, vz: 0,
       onGround: true,
       kickCooldown: 0,
       faceLeft: team === 1,
+      state: 'idle',      // 'idle' | 'bicycle' | 'slide' | 'header' | 'shot'
+      stateTimer: 0,
       mesh, shadow: shad,
       spawnX: sp.x, spawnZ: sp.z
     };
@@ -761,6 +763,8 @@ function spawnPlayers() {
     p.x = p.spawnX; p.y = 0; p.z = p.spawnZ;
     p.vx = 0; p.vy = 0; p.vz = 0;
     p.onGround = true; p.kickCooldown = 0;
+    p.state = 'idle'; p.stateTimer = 0;
+    p.mesh.rotation.set(0, 0, 0);
   });
 }
 
@@ -768,58 +772,119 @@ function spawnPlayers() {
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
-  const prevent = ['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  const prevent = ['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter'];
   if (prevent.includes(e.code)) e.preventDefault();
 
   if (!matchActive) return;
   const p = players[0];
 
-  if (e.code === 'ArrowUp' && p.onGround) {
+  if (e.code === 'ArrowUp' && p.onGround && p.state !== 'slide') {
     p.vy = PLAYER_JUMP; p.onGround = false;
   }
-  if (e.code === 'Space') kickAction(p);
+  if (e.code === 'KeyX')  doBicycleKick(p);
+  if (e.code === 'KeyZ')  doSlide(p);
+  if (e.code === 'KeyC')  doHeader(p);
+  if (e.code === 'Enter') doShot(p);
+  if (e.code === 'Space') doPass(p);
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-function kickAction(p) {
-  if (p.kickCooldown > 0) return;
+// ── YARDIMCI: topa mesafe ────────────────────────────────────────────
+function ballDist(p) {
   const dx = ball.x - p.x;
-  const dy = ball.y - (p.y + 0.9);
+  const dy = ball.y - (p.y + 0.85);
   const dz = ball.z - p.z;
-  const d  = Math.sqrt(dx * dx + dy * dy * 0.5 + dz * dz);
-  if (d > KICK_RANGE) return;
+  return Math.sqrt(dx*dx + dy*dy*0.5 + dz*dz);
+}
 
-  const goalX = p.team === 0 ? FIELD_W / 2 : -FIELD_W / 2;
-  const toGoalX = goalX - ball.x;
-  const len     = Math.sqrt(toGoalX * toGoalX + 0.01);
+// Kaleye yön işareti
+function goalDir(p) {
+  return p.team === 0 ? 1 : -1;
+}
 
-  ball.vx = (toGoalX / len) * KICK_PWR;
-  ball.vy = 5.5 + Math.random() * 2.5;
+// ── X: RÖVEŞATA ──────────────────────────────────────────────────────
+function doBicycleKick(p) {
+  if (p.kickCooldown > 0 || p.state === 'slide') return;
+  if (ballDist(p) > KICK_RANGE * 1.4) return;
+  p.state = 'bicycle'; p.stateTimer = 0.75;
+  if (p.onGround) { p.vy = PLAYER_JUMP * 1.15; p.onGround = false; }
+  else { p.vy = Math.max(p.vy, 9); }
+  ball.vx = goalDir(p) * 19;
+  ball.vy = 9 + Math.random() * 2;
+  ball.vz = -ball.z * 1.1;
+  p.kickCooldown = 0.75;
+}
+
+// ── Z: KAYMA ─────────────────────────────────────────────────────────
+function doSlide(p) {
+  if (p.kickCooldown > 0 || !p.onGround || p.state === 'slide') return;
+  p.state = 'slide'; p.stateTimer = 0.60;
+  p.vx = (p.faceLeft ? -1 : 1) * 12;
+  if (ballDist(p) < KICK_RANGE * 1.5) {
+    ball.vx = goalDir(p) * 13;
+    ball.vy = 2.5 + Math.random() * 2;
+    ball.vz = -ball.z * 0.8;
+  }
+  p.kickCooldown = 0.65;
+}
+
+// ── C: KAFA ──────────────────────────────────────────────────────────
+function doHeader(p) {
+  if (p.kickCooldown > 0 || p.state === 'slide') return;
+  if (ball.y < 0.8) return;
+  if (ballDist(p) > KICK_RANGE * 1.3) return;
+  p.state = 'header'; p.stateTimer = 0.45;
+  ball.vx = goalDir(p) * 15;
+  ball.vy = 4 + Math.random() * 3;
   ball.vz = -ball.z * 0.9;
-  p.kickCooldown = 0.35;
+  p.kickCooldown = 0.45;
+}
+
+// ── ENTER: ŞUT ───────────────────────────────────────────────────────
+function doShot(p) {
+  if (p.kickCooldown > 0 || p.state === 'slide') return;
+  if (ballDist(p) > KICK_RANGE) return;
+  p.state = 'shot'; p.stateTimer = 0.35;
+  ball.vx = goalDir(p) * 17;
+  ball.vy = 4 + Math.random() * 3;
+  ball.vz = -ball.z * 1.0;
+  p.kickCooldown = 0.50;
+}
+
+// ── SPACE: PAS ───────────────────────────────────────────────────────
+function doPass(p) {
+  if (p.kickCooldown > 0 || p.state === 'slide') return;
+  if (ballDist(p) > KICK_RANGE * 1.1) return;
+  const mate = players.find(t => t.team === p.team && t !== p);
+  if (!mate) return;
+  const tx  = mate.x - ball.x;
+  const tz  = mate.z - ball.z;
+  const len = Math.sqrt(tx*tx + tz*tz + 0.01);
+  ball.vx = (tx/len) * 9;
+  ball.vy = 3.5;
+  ball.vz = (tz/len) * 9;
+  p.kickCooldown = 0.40;
 }
 
 // ── İNSAN HAREKETİ ───────────────────────────────────────────────────
 function updateHuman(p, dt) {
+  if (p.state === 'slide') return; // Kayma sırasında yön kontrolü yok
+
   if (keys['ArrowLeft'])       { p.vx = -PLAYER_SPD; p.faceLeft = true;  }
   else if (keys['ArrowRight']) { p.vx =  PLAYER_SPD; p.faceLeft = false; }
   else                         { p.vx *= 0.70; }
 
-  // İleri/geri (Z ekseninde kısıtlı)
-  if (keys['ArrowDown'])       p.vz =  PLAYER_SPD * 0.50;
-  else if (keys['ArrowUp'] && !p.onGround) { /* havada Z hareketi yok */ }
-  else if (p.onGround)         p.vz *= 0.70;
+  if (keys['ArrowDown'])  p.vz = PLAYER_SPD * 0.50;
+  else if (p.onGround)    p.vz *= 0.70;
 }
 
 // ── YAPAY ZEKA ───────────────────────────────────────────────────────
 function updateAI(p, dt) {
-  const isForward = (p.idx === 1 && p.team === 0) || (p.idx === 2 && p.team === 1)
-                    ? false : true;
-  // Forvet → topa git, Defans → yarı sahayı koru
+  if (p.state === 'slide') return;
+
+  const isForward = !((p.idx === 1 && p.team === 0) || (p.idx === 3 && p.team === 1));
   const ownGoalX  = p.team === 0 ? -FIELD_W / 2 : FIELD_W / 2;
-  const targetX   = isForward
-    ? ball.x
-    : ball.x * 0.35 + ownGoalX * 0.65;
+  const targetX   = isForward ? ball.x : ball.x * 0.35 + ownGoalX * 0.65;
   const targetZ   = ball.z * 0.40;
 
   const dx = targetX - p.x;
@@ -829,29 +894,29 @@ function updateAI(p, dt) {
   p.vz = Math.sign(dz) * Math.min(Math.abs(dz) * 1.8, PLAYER_SPD * 0.45);
   p.faceLeft = p.vx < 0;
 
-  // Zıpla: top havadaysa ve yakındaysa
+  // Zıpla
   if (p.onGround) {
     const d2 = Math.sqrt((ball.x - p.x) ** 2 + (ball.z - p.z) ** 2);
     if (d2 < 2.2 && ball.y > 0.9) { p.vy = PLAYER_JUMP * 0.88; p.onGround = false; }
   }
 
-  // YZ vuruşu
-  if (p.kickCooldown <= 0) {
-    const dx2 = ball.x - p.x, dy2 = ball.y - (p.y + 0.9), dz2 = ball.z - p.z;
-    const d   = Math.sqrt(dx2 * dx2 + dy2 * dy2 * 0.5 + dz2 * dz2);
-    if (d < KICK_RANGE) {
-      const goalX   = p.team === 0 ? FIELD_W / 2 : -FIELD_W / 2;
-      ball.vx       = Math.sign(goalX - ball.x) * (KICK_PWR * 0.9);
-      ball.vy       = 5 + Math.random() * 3;
-      ball.vz       = -ball.z * 0.7;
-      p.kickCooldown = 0.55;
-    }
+  // Vuruş: şut veya kafa
+  if (p.kickCooldown <= 0 && ballDist(p) < KICK_RANGE) {
+    if (ball.y > 1.1) doHeader(p);
+    else              doShot(p);
   }
 }
 
-// ── OYUNCU FİZİĞİ ────────────────────────────────────────────────────
+// ── OYUNCU FİZİĞİ + ANİMASYON ───────────────────────────────────────
 function updatePlayer(p, dt) {
   if (p.kickCooldown > 0) p.kickCooldown -= dt;
+  if (p.stateTimer   > 0) {
+    p.stateTimer -= dt;
+    if (p.stateTimer <= 0) { p.stateTimer = 0; p.state = 'idle'; }
+  }
+
+  // Kayma sürtünmesi
+  if (p.state === 'slide') p.vx *= 0.87;
 
   p.vy += GRAVITY * dt;
   p.x  += p.vx * dt;
@@ -861,19 +926,36 @@ function updatePlayer(p, dt) {
   // Zemin
   if (p.y <= 0) { p.y = 0; p.vy = 0; p.onGround = true; p.vz *= 0.6; }
 
-  // X sınırları
   const PX = FIELD_W / 2 - 0.3;
-  p.x = Math.max(-PX, Math.min(PX, p.x));
-  // Z sınırları
   const PZ = FIELD_D / 2 - 0.4;
+  p.x = Math.max(-PX, Math.min(PX, p.x));
   p.z = Math.max(-PZ, Math.min(PZ, p.z));
 
-  // Mesh güncelle
+  // Mesh konum
   p.mesh.position.set(p.x, p.y, p.z);
   const targetRY = p.faceLeft ? Math.PI : 0;
   p.mesh.rotation.y += (targetRY - p.mesh.rotation.y) * 0.22;
-  // Havada hafif eğilme
-  p.mesh.rotation.z = p.onGround ? 0 : p.vx * 0.038;
+
+  // Durum animasyonu
+  const lerp = (a, b, t) => a + (b - a) * t;
+  if (p.state === 'slide') {
+    p.mesh.rotation.x = lerp(p.mesh.rotation.x, 1.35, 0.28);
+    p.mesh.rotation.z = 0;
+  } else if (p.state === 'bicycle') {
+    p.mesh.rotation.z += 5.0 * dt * (p.faceLeft ? -1 : 1);
+    p.mesh.rotation.x = lerp(p.mesh.rotation.x, -0.65, 0.18);
+  } else if (p.state === 'header') {
+    p.mesh.rotation.x = lerp(p.mesh.rotation.x, -0.38, 0.32);
+    p.mesh.rotation.z = lerp(p.mesh.rotation.z, 0, 0.20);
+  } else if (p.state === 'shot') {
+    const swing = p.faceLeft ? 0.42 : -0.42;
+    p.mesh.rotation.z = lerp(p.mesh.rotation.z, swing, 0.32);
+    p.mesh.rotation.x = lerp(p.mesh.rotation.x, 0, 0.20);
+  } else {
+    p.mesh.rotation.x = lerp(p.mesh.rotation.x, 0, 0.18);
+    p.mesh.rotation.z = p.onGround ? lerp(p.mesh.rotation.z, 0, 0.18)
+                                   : p.vx * 0.038;
+  }
 
   // Gölge
   p.shadow.position.x = p.x;

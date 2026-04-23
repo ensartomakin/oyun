@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kafa Topu 3D — Faz 1A</title>
+  <title>Kafa Topu 3D — Faz 1B</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #0b1a2e; font-family: 'Segoe UI', sans-serif; }
@@ -24,8 +24,26 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="phase-tag">FAZ 1A — SAHA · IŞIK · KAMERA · TRİBÜN</div>
-<div id="hint">SÜRÜKLE · DÖNDÜR · YAKLAŞTIR</div>
+<div id="phase-tag">FAZ 1B — TOP FİZİĞİ · SEKME · GOL TESPİTİ</div>
+<div id="hint">SÜRÜKLE · DÖNDÜR · YAKLAŞTIR &nbsp;|&nbsp; R = Topu sıfırla</div>
+
+<!-- GOL mesajı -->
+<div id="goal-msg" style="
+  display:none; position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  font-size:4rem; font-weight:900; color:#FFD700;
+  text-shadow: 0 0 40px rgba(255,200,0,0.9), 0 4px 16px rgba(0,0,0,0.9);
+  text-transform:uppercase; letter-spacing:0.08em;
+  pointer-events:none; z-index:30;
+  animation: goalPop 0.25s ease-out;
+">⚽ GOL!</div>
+<style>
+@keyframes goalPop {
+  0%   { transform: translate(-50%,-50%) scale(0.4); opacity:0; }
+  70%  { transform: translate(-50%,-50%) scale(1.15); opacity:1; }
+  100% { transform: translate(-50%,-50%) scale(1);    opacity:1; }
+}
+</style>
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -395,9 +413,233 @@ groundExt.position.y = -0.12;
 groundExt.receiveShadow = true;
 scene.add(groundExt);
 
+// ════════════════════════════════════════════════════════════════════
+//  FAZ 1B — TOP FİZİĞİ + GOL TESPİTİ
+// ════════════════════════════════════════════════════════════════════
+
+// ── SABİTLER (fizik) ────────────────────────────────────────────────
+const BALL_R     = 0.27;
+const GRAVITY    = -22;       // m/s²
+const BOUNCE_Y   = 0.62;      // zeminle sekme katsayısı
+const BOUNCE_W   = 0.55;      // duvarla sekme katsayısı
+const FRIC_ROLL  = 0.978;     // zemin sürtünmesi (kare başına)
+const FRIC_AIR   = 0.9985;    // hava direnci
+const SPIN_DECAY = 0.94;      // spin sönümlemesi
+
+// ── CANVAS → FUTBOL TOPU DOKUSU ─────────────────────────────────────
+function makeBallTexture() {
+  const c   = document.createElement('canvas');
+  c.width   = 512; c.height = 512;
+  const ctx = c.getContext('2d');
+
+  // Beyaz arka plan
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 512, 512);
+
+  ctx.fillStyle = '#111111';
+
+  // Merkez altıgen
+  function hexagon(cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * 60 - 30) * Math.PI / 180;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Siyah beşgen (merkez)
+  function pentagon(cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 72 - 90) * Math.PI / 180;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  pentagon(256, 256, 62);
+  // Etrafındaki 5 beşgen
+  for (let i = 0; i < 5; i++) {
+    const a = (i * 72 - 90) * Math.PI / 180;
+    pentagon(256 + 148 * Math.cos(a), 256 + 148 * Math.sin(a), 52);
+  }
+  // Köşe beşgenleri
+  for (let i = 0; i < 5; i++) {
+    const a = (i * 72 - 90 + 36) * Math.PI / 180;
+    pentagon(256 + 245 * Math.cos(a), 256 + 245 * Math.sin(a), 46);
+  }
+  // Çizgiler (beşgenler arası)
+  ctx.strokeStyle = '#111111';
+  ctx.lineWidth   = 6;
+  ctx.stroke();
+
+  return new THREE.CanvasTexture(c);
+}
+
+// ── TOP MESH ─────────────────────────────────────────────────────────
+const ballMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_R, 28, 28),
+  new THREE.MeshPhongMaterial({
+    map:       makeBallTexture(),
+    shininess: 60,
+    specular:  new THREE.Color(0x888888)
+  })
+);
+ballMesh.castShadow    = true;
+ballMesh.receiveShadow = true;
+scene.add(ballMesh);
+
+// Top zemin gölgesi (yüksekliğe göre büyür/küçülür)
+const ballShadowMesh = new THREE.Mesh(
+  new THREE.CircleGeometry(0.30, 24),
+  new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.30
+  })
+);
+ballShadowMesh.rotation.x = -Math.PI / 2;
+ballShadowMesh.position.y =  0.006;
+scene.add(ballShadowMesh);
+
+// ── TOP DURUMU ───────────────────────────────────────────────────────
+const ball = {
+  x: 0, y: 2.5, z: 0,       // konum
+  vx: 3, vy: 0, vz: 1.5,    // hız (başlangıç hareketi göstermek için)
+  spin: new THREE.Vector3()  // dönüş ekseni+hız
+};
+
+function resetBall() {
+  ball.x = 0; ball.y = 2.5; ball.z = 0;
+  ball.vx = (Math.random() - 0.5) * 4;
+  ball.vy = 2;
+  ball.vz = (Math.random() - 0.5) * 2;
+}
+
+// ── GOL DURUMU ───────────────────────────────────────────────────────
+let goalCooldown = 0;
+const goalMsgEl  = document.getElementById('goal-msg');
+
+function triggerGoal(team) {
+  if (goalCooldown > 0) return;
+  goalCooldown = 2.5;
+
+  // Mesaj göster
+  goalMsgEl.style.display = 'block';
+  goalMsgEl.style.animation = 'none';
+  // Yeniden animasyon tetikle
+  void goalMsgEl.offsetWidth;
+  goalMsgEl.style.animation = 'goalPop 0.25s ease-out';
+
+  // 2 sn sonra topu sıfırla
+  setTimeout(() => {
+    goalMsgEl.style.display = 'none';
+    resetBall();
+  }, 2200);
+}
+
+// ── FİZİK GÜNCELLEMESİ ──────────────────────────────────────────────
+function updateBallPhysics(dt) {
+  if (goalCooldown > 0) {
+    goalCooldown -= dt;
+    return; // Gol animasyonu sırasında top donuk
+  }
+
+  // Yerçekimi
+  ball.vy += GRAVITY * dt;
+
+  // Konum
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+  ball.z += ball.vz * dt;
+
+  // Hava direnci
+  ball.vx *= FRIC_AIR;
+  ball.vz *= FRIC_AIR;
+
+  // ── ZEMIN SEKMESİ ─────────────────────────────────────────────────
+  if (ball.y < BALL_R) {
+    ball.y   =  BALL_R;
+    ball.vy  = -ball.vy * BOUNCE_Y;
+
+    // Yeterince yavaşladıysa yuvarlanmaya geç
+    if (Math.abs(ball.vy) < 0.5) ball.vy = 0;
+
+    // Zemin sürtünmesi
+    ball.vx *= FRIC_ROLL;
+    ball.vz *= FRIC_ROLL;
+  }
+
+  // ── TAVAN ─────────────────────────────────────────────────────────
+  if (ball.y > 10 - BALL_R) {
+    ball.y  =  10 - BALL_R;
+    ball.vy = -ball.vy * 0.45;
+  }
+
+  // ── Z DUVARLAR (yan sınırlar) ──────────────────────────────────────
+  const ZB = FIELD_D / 2 - BALL_R;
+  if (Math.abs(ball.z) > ZB) {
+    ball.z  =  Math.sign(ball.z) * ZB;
+    ball.vz = -ball.vz * BOUNCE_W;
+  }
+
+  // ── X DUVARLAR / GOL TESPİTİ ──────────────────────────────────────
+  const XB = FIELD_W / 2 - BALL_R;
+  if (Math.abs(ball.x) > XB) {
+
+    // Kale bölgesi: y < GOAL_H ve z içinde GOAL_W
+    const inGoal = ball.y < GOAL_H && Math.abs(ball.z) < (GOAL_W / 2 - 0.1);
+
+    if (inGoal) {
+      // Gol! Hangi takım attı: ball.x > 0 → sağ kaleye → sol takım (Mavi) attı
+      triggerGoal(ball.x > 0 ? 0 : 1);
+    } else {
+      // Saha dışı → duvardan sek
+      ball.x  =  Math.sign(ball.x) * XB;
+      ball.vx = -ball.vx * BOUNCE_W;
+    }
+  }
+
+  // ── TOP DÖNÜŞÜ (görsel) ───────────────────────────────────────────
+  // Hareket yönüne göre top döner
+  ballMesh.rotation.z -= ball.vx * dt * 1.6;
+  ballMesh.rotation.x += ball.vz * dt * 1.6;
+
+  // ── MESH GÜNCELLE ─────────────────────────────────────────────────
+  ballMesh.position.set(ball.x, ball.y, ball.z);
+
+  // Gölge: yüksekliğe göre opacity ve ölçek
+  const heightRatio  = Math.min(ball.y / 7, 1);
+  const shadowOpacity = 0.30 * (1 - heightRatio * 0.72);
+  const shadowScale   = 0.85 + heightRatio * 0.45;
+
+  ballShadowMesh.position.x        = ball.x;
+  ballShadowMesh.position.z        = ball.z;
+  ballShadowMesh.material.opacity  = shadowOpacity;
+  ballShadowMesh.scale.setScalar(shadowScale);
+}
+
+// ── KLAVYE: R = topu sıfırla ─────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.code === 'KeyR') resetBall();
+});
+
 // ── RENDER DÖNGÜSÜ ───────────────────────────────────────────────────
+let prevTime = performance.now();
+
 function animate() {
   requestAnimationFrame(animate);
+
+  const now = performance.now();
+  const dt  = Math.min((now - prevTime) / 1000, 0.05); // max 50ms adım
+  prevTime  = now;
+
+  updateBallPhysics(dt);
   orbit.update();
   renderer.render(scene, camera);
 }

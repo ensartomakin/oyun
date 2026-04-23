@@ -91,7 +91,7 @@
 <!-- ANA MENÜ -->
 <div id="menu">
   <h1>⚽ KAFA TOPU 3D</h1>
-  <div class="sub">1 vs 1 &nbsp;·&nbsp; FAZ 3</div>
+  <div class="sub">2 vs 2 &nbsp;·&nbsp; FAZ 4</div>
   <button id="btn-play" onclick="startFromMenu()">OYNA</button>
   <div class="controls">
     ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA / GERİ &nbsp;|&nbsp; ↓ İLERİ<br>
@@ -123,7 +123,7 @@
   position:fixed; top:62px; right:12px; font:bold 11px monospace;
   color:#ffee44; background:rgba(0,0,0,0.7); padding:3px 8px;
   border-radius:4px; z-index:60; pointer-events:none;
-">Faz 4</div>
+">Faz 4 · 2v2</div>
 
 <!-- Canlı debug paneli -->
 <div id="dbg" style="
@@ -789,8 +789,10 @@ const TEAM_COLORS = [0x2255FF, 0xFF2211];
 
 // Başlangıç konumları — 1v1
 const SPAWN = [
-  { x: -4.0, z: 0 }, // Mavi (İnsan)
-  { x:  4.0, z: 0 }, // Kırmızı (YZ)
+  { x: -3.5, z:  0.7 }, // Mavi  0 — İnsan (forvet)
+  { x: -6.5, z: -0.7 }, // Mavi  1 — YZ    (defans)
+  { x:  3.5, z:  0.7 }, // Kırmızı 2 — YZ  (forvet)
+  { x:  6.5, z: -0.7 }, // Kırmızı 3 — YZ  (defans)
 ];
 
 let players = [];
@@ -798,14 +800,14 @@ let players = [];
 function createPlayers() {
   players.forEach(p => { scene.remove(p.mesh); scene.remove(p.shadow); });
   players = SPAWN.map((sp, i) => {
-    const team  = i; // 1v1: oyuncu 0 = mavi, oyuncu 1 = kırmızı
+    const team  = i < 2 ? 0 : 1; // 2v2: 0-1 = mavi, 2-3 = kırmızı
     const mesh  = makePlayerMesh(TEAM_COLORS[team]);
     const shad  = makePlayerShadow();
     mesh.position.set(sp.x, 0, sp.z);
     scene.add(mesh);
     return {
       team, idx: i,
-      isHuman: i === 0,
+      isHuman: i === 0, // sadece oyuncu 0 insan
       x: sp.x, y: 0, z: sp.z,
       vx: 0, vy: 0, vz: 0,
       onGround: true,
@@ -918,7 +920,7 @@ function doPass(p) {
   if (p.kickCooldown > 0 || p.state === 'slide') return;
   if (ballDist(p) > KICK_RANGE * 1.1) return;
   const mate = players.find(t => t.team === p.team && t !== p);
-  if (!mate) { doShot(p); return; }   // 1v1: pas yok → şut yap
+  if (!mate) return;
   const tx  = mate.x - ball.x;
   const tz  = mate.z - ball.z;
   const len = Math.sqrt(tx*tx + tz*tz + 0.01);
@@ -952,35 +954,48 @@ function updateAI(p, dt) {
   const ownGoalX = p.team === 0 ? -FIELD_W / 2 : FIELD_W / 2;
   const oppGoalX = p.team === 0 ?  FIELD_W / 2 : -FIELD_W / 2;
 
-  // ── Top yolu tahmini (0.28s ileri) ──────────────────────────────
+  // 2v2 rol: idx 1 = mavi defans, idx 3 = kırmızı defans; idx 2 = kırmızı forvet
+  // idx 1,3 → defans rolü; idx 2 → forvet rolü
+  const isDefender = (p.idx === 1 || p.idx === 3);
+
   const T     = 0.28;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const predX = clamp(ball.x + ball.vx * T, -FIELD_W/2+0.5, FIELD_W/2-0.5);
   const predZ = clamp(ball.z + ball.vz * T, -FIELD_D/2+0.5, FIELD_D/2-0.5);
 
-  // ── Mod: savunma mı, hücum mu? ───────────────────────────────────
   const danger = (p.team === 0 && ball.vx < -2.5 && ball.x < 1)
               || (p.team === 1 && ball.vx >  2.5 && ball.x > -1);
 
   let targetX, targetZ;
-  if (danger) {
-    // Savunma: topun yolunu kes
-    targetX = predX * 0.45 + ownGoalX * 0.55;
-    targetZ = predZ * 0.45;
+  if (isDefender) {
+    // Defans: kaleyi koru, ama topun yanında olursa müdahale et
+    const defLineX = ownGoalX * 0.55;
+    if (danger || Math.abs(ball.x - ownGoalX) < FIELD_W * 0.45) {
+      targetX = predX * 0.35 + ownGoalX * 0.65;
+      targetZ = predZ * 0.5;
+    } else {
+      // Top uzaktayken savunma hattında bekle
+      targetX = defLineX;
+      targetZ = predZ * 0.3;
+    }
   } else {
-    // Hücum: tahmin noktasına koş
-    targetX = predX;
-    targetZ = predZ * 0.55;
+    // Forvet: topu takip et, hücuma geç
+    if (danger) {
+      targetX = predX * 0.45 + ownGoalX * 0.55;
+      targetZ = predZ * 0.45;
+    } else {
+      targetX = predX;
+      targetZ = predZ * 0.55;
+    }
   }
 
-  const spd = PLAYER_SPD * (danger ? 1.0 : 0.93);
+  const spd = PLAYER_SPD * (danger ? 1.0 : (isDefender ? 0.88 : 0.93));
   const dx  = targetX - p.x;
   const dz  = targetZ - p.z;
   p.vx = Math.sign(dx) * Math.min(Math.abs(dx) * 3.5, spd);
   p.vz = Math.sign(dz) * Math.min(Math.abs(dz) * 2.2, spd * 0.55);
   if (Math.abs(p.vx) > 0.3) p.faceLeft = p.vx < 0;
 
-  // ── Zıplama ──────────────────────────────────────────────────────
   if (p.onGround) {
     const d2 = Math.sqrt((ball.x - p.x)**2 + (ball.z - p.z)**2);
     if (d2 < 2.5 && ball.y > 0.8) { p.vy = PLAYER_JUMP * 0.88; p.onGround = false; }
@@ -988,7 +1003,7 @@ function updateAI(p, dt) {
 
   if (p.kickCooldown > 0) return;
 
-  // ── Kayma taktiği: insan topla dribble yapıyorsa yakla ──────────
+  // Kayma taktiği: insan topla dribble yapıyorsa yakla
   const human = players.find(t => t.isHuman);
   if (human && p.onGround) {
     const humanHasBall = ballDist(human) < KICK_RANGE * 1.3;
@@ -999,19 +1014,26 @@ function updateAI(p, dt) {
     }
   }
 
-  // ── Vuruş seçimi ─────────────────────────────────────────────────
-  const d          = ballDist(p);
-  const toGoal     = Math.abs(p.x - oppGoalX);
+  // Pas: forvet yakındaysa defender pas atar
+  if (isDefender) {
+    const d = ballDist(p);
+    if (d < KICK_RANGE) {
+      const mate = players.find(t => t.team === p.team && t !== p);
+      if (mate && Math.random() < 0.4) { doPass(p); return; }
+    }
+  }
+
+  const d      = ballDist(p);
+  const toGoal = Math.abs(p.x - oppGoalX);
 
   if (d < KICK_RANGE) {
     if (!p.onGround && ball.y > 1.2) {
-      doHeader(p);                              // havada kafa
+      doHeader(p);
     } else if (toGoal < 5 && p.onGround && ball.y < 1.0) {
-      Math.random() < 0.4 ? doBicycleKick(p) : doShot(p); // yakın: röveşata veya şut
+      Math.random() < 0.4 ? doBicycleKick(p) : doShot(p);
     } else if (toGoal < 10) {
-      doShot(p);                                // orta mesafe şut
+      doShot(p);
     }
-    // Uzak: dribble ile yaklaş, vuruş yapma
   }
 }
 

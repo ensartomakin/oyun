@@ -1263,7 +1263,7 @@ function createPlayers() {
     const bodyPivot = new THREE.Group(); // eğim / zıplama / ölçekleme burada
     group.add(bodyPivot);
 
-    let mixer = null, bones = {}, mixerActions = {};
+    let mixer = null, bones = {}, mixerActions = {}, legPivot = null;
     if (loadedModels[charId]) {
       const model = loadedModels[charId].clone(true);
       bodyPivot.add(model);
@@ -1280,7 +1280,6 @@ function createPlayers() {
           if (cn.includes('idle') || cn.includes('stand')) mixerActions.idle = action;
           if (cn.includes('jump'))                          mixerActions.jump = action;
         });
-        // Yoksa ilk animasyonu idle kabul et
         if (!mixerActions.idle && anims.length > 0)
           mixerActions.idle = mixer.clipAction(anims[0]);
         if (mixerActions.idle) mixerActions.idle.play();
@@ -1307,7 +1306,7 @@ function createPlayers() {
       kickCooldown: 0,
       faceLeft: team === 1,
       state: 'idle', stateTimer: 0,
-      mesh: group, bodyPivot, bones,
+      mesh: group, bodyPivot, legPivot, bones,
       mixer, mixerActions,
       animTime: 0, landTimer: 0,
       shadow: shad,
@@ -1318,92 +1317,90 @@ function createPlayers() {
 
 // ── KARAKTER HAREKET ANİMASYONU ──────────────────────────────────────
 function animatePlayerMesh(p, dt) {
-  const lerp  = (a, b, t) => a + (b - a) * t;
-  const spd   = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
-  const moving = spd > 0.4;
+  const lerp   = (a, b, t) => a + (b - a) * t;
+  const spd    = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+  const moving = spd > 0.3;
+  const ratio  = Math.min(spd / PLAYER_SPD, 1); // 0-1
   const pivot  = p.bodyPivot;
   if (!pivot) return;
 
   // Animasyon zamanı — hıza orantılı ilerler
-  p.animTime += dt * spd * 2.2;
+  p.animTime += dt * spd * 2.4;
   const t = p.animTime;
 
-  // ── AnimationMixer (built-in klipler) ────────────────────────────
+  // ── AnimationMixer (GLB'de hazır animasyon varsa) ────────────────
   if (p.mixer) {
     p.mixer.update(dt);
     const { idle, walk, jump } = p.mixerActions;
-    const airborne = !p.onGround;
-    if (jump && airborne) {
-      if (!jump.isRunning()) { jump.reset().play(); if (idle) idle.stop(); if (walk) walk.stop(); }
-    } else if (walk && moving && !airborne) {
-      if (!walk.isRunning()) { walk.reset().play(); if (idle) idle.stop(); }
-    } else if (idle) {
-      if (!idle.isRunning()) { idle.reset().play(); if (walk) walk.stop(); }
-    }
+    const air = !p.onGround;
+    if (jump && air)              { if (!jump.isRunning()) { jump.reset().play(); idle?.stop(); walk?.stop(); } }
+    else if (walk && moving)      { if (!walk.isRunning()) { walk.reset().play(); idle?.stop(); } }
+    else if (idle)                { if (!idle.isRunning()) { idle.reset().play(); walk?.stop(); } }
   }
 
-  // ── Prosedürel kemik animasyonu ──────────────────────────────────
-  if (!p.mixer && moving && p.onGround && p.state === 'idle') {
-    const swing = Math.min(spd / PLAYER_SPD, 1) * 0.55;
-    const freq  = t * 3.8;
-    const animBone = (bone, axis, amp, phase) => {
-      if (!bone || !bone._ir) return;
+  // ── Kemik animasyonu (rigged modelde) ───────────────────────────
+  const hasBones = Object.keys(p.bones).length > 0;
+  if (hasBones && moving && p.onGround && p.state === 'idle') {
+    const swing = ratio * 0.7;
+    const freq  = t * 4.0;
+    const ab = (bone, axis, amp, phase) => {
+      if (!bone?._ir) return;
       bone.rotation[axis] = bone._ir[axis] + Math.sin(freq + phase) * amp;
     };
-    animBone(p.bones.lArm, 'x',  swing,        0);
-    animBone(p.bones.rArm, 'x',  swing,        Math.PI);
-    animBone(p.bones.lLeg, 'x',  swing * 1.25, Math.PI);
-    animBone(p.bones.rLeg, 'x',  swing * 1.25, 0);
-  } else if (!p.mixer && p.state === 'idle') {
-    // Boşta: kemikleri başlangıca döndür
-    const resetBone = (bone, axis) => {
-      if (!bone || !bone._ir) return;
-      bone.rotation[axis] = lerp(bone.rotation[axis], bone._ir[axis], 0.15);
+    ab(p.bones.lArm, 'x', swing,       0);
+    ab(p.bones.rArm, 'x', swing,       Math.PI);
+    ab(p.bones.lLeg, 'x', swing * 1.3, Math.PI);
+    ab(p.bones.rLeg, 'x', swing * 1.3, 0);
+  } else if (hasBones && !moving) {
+    const rb = (bone) => {
+      if (!bone?._ir) return;
+      bone.rotation.x = lerp(bone.rotation.x, bone._ir.x, 0.12);
     };
-    ['lArm','rArm','lLeg','rLeg'].forEach(k => { resetBone(p.bones[k], 'x'); });
+    ['lArm','rArm','lLeg','rLeg'].forEach(k => rb(p.bones[k]));
   }
 
-  // ── Gövde pivot animasyonları (her zaman aktif) ──────────────────
-  if (p.state !== 'slide' && p.state !== 'bicycle') {
-    // İleri eğim — koşarken
-    const targetLean = moving ? -0.10 : 0;
-    pivot.rotation.x = lerp(pivot.rotation.x, targetLean, 0.12);
+  // ── Gövde pivot animasyonları ────────────────────────────────────
+  if (p.state === 'slide' || p.state === 'bicycle') return;
 
-    // Yan sallantı
-    const sway = moving ? Math.sin(t * 3.8) * 0.028 : 0;
-    pivot.rotation.z = lerp(pivot.rotation.z, sway, 0.18);
+  const freq = t * 4.0;
 
-    // Dikey zıplama (bob)
-    const bob = moving && p.onGround ? Math.abs(Math.sin(t * 3.8)) * 0.055 : 0;
-    pivot.position.y = lerp(pivot.position.y, bob, 0.20);
+  // İleri eğim — koşarken 16° (belirgin)
+  const targetLean = moving ? -0.28 * ratio : 0;
+  pivot.rotation.x = lerp(pivot.rotation.x, targetLean, 0.14);
+
+  // Kalça sallantısı — koşarken yan eksen (adım hissi)
+  const targetHipZ = moving ? Math.sin(freq) * 0.12 * ratio : 0;
+  pivot.rotation.z = lerp(pivot.rotation.z, targetHipZ, 0.20);
+
+  // Gövde dönüşü — adım ritmiyle hafif y ekseni
+  const targetHipY = moving ? Math.sin(freq + Math.PI / 2) * 0.10 * ratio : 0;
+  pivot.rotation.y = lerp(pivot.rotation.y, targetHipY, 0.18);
+
+  // Dikey zıplama (bob) — her adımda yukarı aşağı
+  const targetBob = (moving && p.onGround)
+    ? Math.abs(Math.sin(freq)) * 0.13 * ratio
+    : 0;
+  pivot.position.y = lerp(pivot.position.y, targetBob, 0.22);
+
+  // Alt gövde / bacak simülasyonu (kemik yoksa)
+  if (!hasBones && p.legPivot) {
+    p.legPivot.rotation.x = Math.sin(freq) * 0.45 * ratio;
   }
 
-  // ── Zıplama ölçeği (squash & stretch) ───────────────────────────
+  // ── Squash & Stretch ────────────────────────────────────────────
+  const sc = pivot.scale;
   if (!p.onGround) {
     if (p.vy > 0) {
-      // Yukarı gidişte uzama
-      pivot.scale.y = lerp(pivot.scale.y, 1.10, 0.18);
-      pivot.scale.x = lerp(pivot.scale.x, 0.92, 0.18);
-      pivot.scale.z = lerp(pivot.scale.z, 0.92, 0.18);
+      sc.x = lerp(sc.x, 0.88, 0.20); sc.y = lerp(sc.y, 1.20, 0.20); sc.z = lerp(sc.z, 0.88, 0.20);
     } else {
-      // Düşüşte hafif ezilme
-      pivot.scale.y = lerp(pivot.scale.y, 0.96, 0.12);
-      pivot.scale.x = lerp(pivot.scale.x, 1.02, 0.12);
+      sc.x = lerp(sc.x, 1.04, 0.14); sc.y = lerp(sc.y, 0.94, 0.14); sc.z = lerp(sc.z, 1.04, 0.14);
     }
-    p.landTimer = 0.12; // iniş hazırlığı
+    p.landTimer = 0.14;
+  } else if (p.landTimer > 0) {
+    p.landTimer -= dt;
+    sc.x = lerp(sc.x, 1.22, 0.32); sc.y = lerp(sc.y, 0.76, 0.32); sc.z = lerp(sc.z, 1.22, 0.32);
   } else {
-    if (p.landTimer > 0) {
-      // İnişte sert ezilme
-      p.landTimer -= dt;
-      pivot.scale.y = lerp(pivot.scale.y, 0.82, 0.30);
-      pivot.scale.x = lerp(pivot.scale.x, 1.15, 0.30);
-      pivot.scale.z = lerp(pivot.scale.z, 1.15, 0.30);
-    } else {
-      // Normal boyuta dön
-      pivot.scale.y = lerp(pivot.scale.y, 1.0, 0.22);
-      pivot.scale.x = lerp(pivot.scale.x, 1.0, 0.22);
-      pivot.scale.z = lerp(pivot.scale.z, 1.0, 0.22);
-    }
+    sc.x = lerp(sc.x, 1.0, 0.20); sc.y = lerp(sc.y, 1.0, 0.20); sc.z = lerp(sc.z, 1.0, 0.20);
   }
 }
 
@@ -1420,6 +1417,7 @@ function spawnPlayers() {
       p.bodyPivot.position.set(0, 0, 0);
       p.bodyPivot.scale.set(1, 1, 1);
     }
+    if (p.legPivot) p.legPivot.rotation.set(0, 0, 0);
   });
 }
 

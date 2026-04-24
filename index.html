@@ -1181,8 +1181,7 @@ async function preloadAll() {
         model.position.y = -scaledBox.min.y;
 
         const charH = scaledBox.max.y - scaledBox.min.y;
-        charMeta[ch.id] = { markerY: charH + 0.35 };
-        loadedModels[ch.id] = model;
+        charMeta[ch.id] = { markerY: charH + 0.35, animations: gltf.animations || [] };
 
         loaded++;
         if (bar) bar.style.width = (loaded / CHARACTERS.length * 100) + '%';
@@ -1230,26 +1229,68 @@ const SPAWN = [
 
 let players = [];
 
+// Modeldeki kemikleri ismine göre bul
+function findBones(model) {
+  const b = {};
+  model.traverse(o => {
+    if (!o.isBone) return;
+    const n = o.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const has = (...s) => s.some(k => n.includes(k));
+    if (!b.lArm && has('leftupperarm','leftarm','upperarml','arml','leftshoulder','shoulderl'))   { b.lArm = o; }
+    if (!b.rArm && has('rightupperarm','rightarm','upperarmr','armr','rightshoulder','shoulderr')) { b.rArm = o; }
+    if (!b.lLeg && has('leftupleg','leftupperleg','leftthigh','thighl','upllegl','legl','hipleft'))  { b.lLeg = o; }
+    if (!b.rLeg && has('rightupleg','rightupperleg','rightthigh','thighr','upllegr','legr','hipright')){ b.rLeg = o; }
+  });
+  // Başlangıç rotasyonlarını kaydet
+  Object.values(b).forEach(bone => {
+    bone._ir = { x: bone.rotation.x, y: bone.rotation.y, z: bone.rotation.z };
+  });
+  return b;
+}
+
 function createPlayers() {
-  players.forEach(p => { scene.remove(p.mesh); scene.remove(p.shadow); });
+  players.forEach(p => {
+    scene.remove(p.mesh); scene.remove(p.shadow);
+    if (p.mixer) p.mixer.stopAllAction();
+  });
   players = SPAWN.map((sp, i) => {
     const team   = i < 2 ? 0 : 1;
     const charId = charAssignment[i];
+    const meta   = charMeta[charId];
 
-    // GLB grubunu klonla ve sahneye ekle
-    const group = new THREE.Group();
+    const group     = new THREE.Group();
+    const bodyPivot = new THREE.Group(); // eğim / zıplama / ölçekleme burada
+    group.add(bodyPivot);
+
+    let mixer = null, bones = {}, mixerActions = {};
     if (loadedModels[charId]) {
       const model = loadedModels[charId].clone(true);
-      group.add(model);
+      bodyPivot.add(model);
+      bones = findBones(model);
+
+      // Built-in animasyon varsa mixer kur
+      const anims = meta?.animations || [];
+      if (anims.length > 0) {
+        mixer = new THREE.AnimationMixer(model);
+        anims.forEach(clip => {
+          const action = mixer.clipAction(clip);
+          const cn = clip.name.toLowerCase();
+          if (cn.includes('walk') || cn.includes('run'))   mixerActions.walk = action;
+          if (cn.includes('idle') || cn.includes('stand')) mixerActions.idle = action;
+          if (cn.includes('jump'))                          mixerActions.jump = action;
+        });
+        // Yoksa ilk animasyonu idle kabul et
+        if (!mixerActions.idle && anims.length > 0)
+          mixerActions.idle = mixer.clipAction(anims[0]);
+        if (mixerActions.idle) mixerActions.idle.play();
+      }
     } else {
-      // Fallback: eski geometri
-      group.add(makePlayerMesh(TEAM_COLORS[team]));
+      bodyPivot.add(makePlayerMesh(TEAM_COLORS[team]));
     }
 
-    // Takım rengi üçgen
+    // Takım üçgeni (group'a doğrudan — bounce'tan etkilenmesin)
     const marker = makeTeamMarker(TEAM_COLORS[team]);
-    const mY = charMeta[charId] ? charMeta[charId].markerY : 2.0;
-    marker.position.y = mY;
+    marker.position.y = meta?.markerY ?? 2.0;
     group.add(marker);
 
     group.position.set(sp.x, 0, sp.z);
@@ -1264,12 +1305,105 @@ function createPlayers() {
       onGround: true,
       kickCooldown: 0,
       faceLeft: team === 1,
-      state: 'idle',
-      stateTimer: 0,
-      mesh: group, shadow: shad,
+      state: 'idle', stateTimer: 0,
+      mesh: group, bodyPivot, bones,
+      mixer, mixerActions,
+      animTime: 0, landTimer: 0,
+      shadow: shad,
       spawnX: sp.x, spawnZ: sp.z
     };
   });
+}
+
+// ── KARAKTER HAREKET ANİMASYONU ──────────────────────────────────────
+function animatePlayerMesh(p, dt) {
+  const lerp  = (a, b, t) => a + (b - a) * t;
+  const spd   = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+  const moving = spd > 0.4;
+  const pivot  = p.bodyPivot;
+  if (!pivot) return;
+
+  // Animasyon zamanı — hıza orantılı ilerler
+  p.animTime += dt * spd * 2.2;
+  const t = p.animTime;
+
+  // ── AnimationMixer (built-in klipler) ────────────────────────────
+  if (p.mixer) {
+    p.mixer.update(dt);
+    const { idle, walk, jump } = p.mixerActions;
+    const airborne = !p.onGround;
+    if (jump && airborne) {
+      if (!jump.isRunning()) { jump.reset().play(); if (idle) idle.stop(); if (walk) walk.stop(); }
+    } else if (walk && moving && !airborne) {
+      if (!walk.isRunning()) { walk.reset().play(); if (idle) idle.stop(); }
+    } else if (idle) {
+      if (!idle.isRunning()) { idle.reset().play(); if (walk) walk.stop(); }
+    }
+  }
+
+  // ── Prosedürel kemik animasyonu ──────────────────────────────────
+  if (!p.mixer && moving && p.onGround && p.state === 'idle') {
+    const swing = Math.min(spd / PLAYER_SPD, 1) * 0.55;
+    const freq  = t * 3.8;
+    const animBone = (bone, axis, amp, phase) => {
+      if (!bone || !bone._ir) return;
+      bone.rotation[axis] = bone._ir[axis] + Math.sin(freq + phase) * amp;
+    };
+    animBone(p.bones.lArm, 'x',  swing,        0);
+    animBone(p.bones.rArm, 'x',  swing,        Math.PI);
+    animBone(p.bones.lLeg, 'x',  swing * 1.25, Math.PI);
+    animBone(p.bones.rLeg, 'x',  swing * 1.25, 0);
+  } else if (!p.mixer && p.state === 'idle') {
+    // Boşta: kemikleri başlangıca döndür
+    const resetBone = (bone, axis) => {
+      if (!bone || !bone._ir) return;
+      bone.rotation[axis] = lerp(bone.rotation[axis], bone._ir[axis], 0.15);
+    };
+    ['lArm','rArm','lLeg','rLeg'].forEach(k => { resetBone(p.bones[k], 'x'); });
+  }
+
+  // ── Gövde pivot animasyonları (her zaman aktif) ──────────────────
+  if (p.state !== 'slide' && p.state !== 'bicycle') {
+    // İleri eğim — koşarken
+    const targetLean = moving ? -0.10 : 0;
+    pivot.rotation.x = lerp(pivot.rotation.x, targetLean, 0.12);
+
+    // Yan sallantı
+    const sway = moving ? Math.sin(t * 3.8) * 0.028 : 0;
+    pivot.rotation.z = lerp(pivot.rotation.z, sway, 0.18);
+
+    // Dikey zıplama (bob)
+    const bob = moving && p.onGround ? Math.abs(Math.sin(t * 3.8)) * 0.055 : 0;
+    pivot.position.y = lerp(pivot.position.y, bob, 0.20);
+  }
+
+  // ── Zıplama ölçeği (squash & stretch) ───────────────────────────
+  if (!p.onGround) {
+    if (p.vy > 0) {
+      // Yukarı gidişte uzama
+      pivot.scale.y = lerp(pivot.scale.y, 1.10, 0.18);
+      pivot.scale.x = lerp(pivot.scale.x, 0.92, 0.18);
+      pivot.scale.z = lerp(pivot.scale.z, 0.92, 0.18);
+    } else {
+      // Düşüşte hafif ezilme
+      pivot.scale.y = lerp(pivot.scale.y, 0.96, 0.12);
+      pivot.scale.x = lerp(pivot.scale.x, 1.02, 0.12);
+    }
+    p.landTimer = 0.12; // iniş hazırlığı
+  } else {
+    if (p.landTimer > 0) {
+      // İnişte sert ezilme
+      p.landTimer -= dt;
+      pivot.scale.y = lerp(pivot.scale.y, 0.82, 0.30);
+      pivot.scale.x = lerp(pivot.scale.x, 1.15, 0.30);
+      pivot.scale.z = lerp(pivot.scale.z, 1.15, 0.30);
+    } else {
+      // Normal boyuta dön
+      pivot.scale.y = lerp(pivot.scale.y, 1.0, 0.22);
+      pivot.scale.x = lerp(pivot.scale.x, 1.0, 0.22);
+      pivot.scale.z = lerp(pivot.scale.z, 1.0, 0.22);
+    }
+  }
 }
 
 function spawnPlayers() {
@@ -1278,7 +1412,13 @@ function spawnPlayers() {
     p.vx = 0; p.vy = 0; p.vz = 0;
     p.onGround = true; p.kickCooldown = 0;
     p.state = 'idle'; p.stateTimer = 0;
+    p.animTime = 0; p.landTimer = 0;
     p.mesh.rotation.set(0, 0, 0);
+    if (p.bodyPivot) {
+      p.bodyPivot.rotation.set(0, 0, 0);
+      p.bodyPivot.position.set(0, 0, 0);
+      p.bodyPivot.scale.set(1, 1, 1);
+    }
   });
 }
 
@@ -1766,6 +1906,7 @@ function animate() {
     else           updateAI(p, dt);
     updatePlayer(p, dt);
     checkDribble(p);
+    animatePlayerMesh(p, dt);
   });
 
   // Top + timer

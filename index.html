@@ -1324,9 +1324,10 @@ function animatePlayerMesh(p, dt) {
   const pivot  = p.bodyPivot;
   if (!pivot) return;
 
-  // Animasyon zamanı — hıza orantılı ilerler
-  p.animTime += dt * spd * 2.4;
-  const t = p.animTime;
+  // Animasyon zamanı — hıza orantılı, yavaş döngü (koşuda ~1s/cycle)
+  p.animTime += dt * spd * 1.1;
+  const t   = p.animTime;
+  const freq = t;               // doğrudan, çarpan yok
 
   // ── AnimationMixer (GLB'de hazır animasyon varsa) ────────────────
   if (p.mixer) {
@@ -1342,7 +1343,6 @@ function animatePlayerMesh(p, dt) {
   const hasBones = Object.keys(p.bones).length > 0;
   if (hasBones && moving && p.onGround && p.state === 'idle') {
     const swing = ratio * 0.7;
-    const freq  = t * 4.0;
     const ab = (bone, axis, amp, phase) => {
       if (!bone?._ir) return;
       bone.rotation[axis] = bone._ir[axis] + Math.sin(freq + phase) * amp;
@@ -1362,18 +1362,18 @@ function animatePlayerMesh(p, dt) {
   // ── Gövde pivot animasyonları ────────────────────────────────────
   if (p.state === 'slide' || p.state === 'bicycle') return;
 
-  const freq = t * 4.0;
+  // İleri eğim — karakterin baktığı yönde eğil
+  // faceLeft=true → rotation.y=π → sağa doğru eğmek için lean pozitif olmalı
+  const leanDir    = p.faceLeft ? 1 : -1;
+  const targetLean = moving ? leanDir * 0.22 * ratio : 0;
+  pivot.rotation.x = lerp(pivot.rotation.x, targetLean, 0.16);
 
-  // İleri eğim — koşarken 16° (belirgin)
-  const targetLean = moving ? -0.28 * ratio : 0;
-  pivot.rotation.x = lerp(pivot.rotation.x, targetLean, 0.14);
+  // Kalça sallantısı (z ekseni) — adım ritmiyle belirgin
+  const targetHipZ = moving ? Math.sin(freq) * 0.18 * ratio : 0;
+  pivot.rotation.z = lerp(pivot.rotation.z, targetHipZ, 0.22);
 
-  // Kalça sallantısı — koşarken yan eksen (adım hissi)
-  const targetHipZ = moving ? Math.sin(freq) * 0.12 * ratio : 0;
-  pivot.rotation.z = lerp(pivot.rotation.z, targetHipZ, 0.20);
-
-  // Gövde dönüşü — adım ritmiyle hafif y ekseni
-  const targetHipY = moving ? Math.sin(freq + Math.PI / 2) * 0.10 * ratio : 0;
+  // Gövde dönüşü (y ekseni) — kol karşıtlığı
+  const targetHipY = moving ? Math.sin(freq + Math.PI / 2) * 0.12 * ratio : 0;
   pivot.rotation.y = lerp(pivot.rotation.y, targetHipY, 0.18);
 
   // Dikey zıplama (bob) — her adımda yukarı aşağı
@@ -1916,10 +1916,15 @@ function animate() {
   try {
     const p0 = players[0];
     const pressed = Object.keys(keys).filter(k => keys[k]).join(' ') || '–';
+    const bp = p0.bodyPivot;
+    const f2 = v => v.toFixed(3);
     document.getElementById('dbg').textContent =
-      `x:${p0.x.toFixed(2)} z:${p0.z.toFixed(2)} y:${p0.y.toFixed(2)}\n` +
-      `vx:${p0.vx.toFixed(2)} vz:${p0.vz.toFixed(2)} vy:${p0.vy.toFixed(2)}\n` +
-      `ground:${p0.onGround} state:${p0.state}\n` +
+      `pos  x:${p0.x.toFixed(2)} z:${p0.z.toFixed(2)} y:${p0.y.toFixed(2)}\n` +
+      `vel  vx:${p0.vx.toFixed(2)} vz:${p0.vz.toFixed(2)} vy:${p0.vy.toFixed(2)}\n` +
+      `state:${p0.state} ground:${p0.onGround}\n` +
+      `animT:${p0.animTime?.toFixed(2)} ratio:${(Math.min(Math.sqrt(p0.vx**2+p0.vz**2)/PLAYER_SPD,1)).toFixed(2)}\n` +
+      (bp ? `pivot rx:${f2(bp.rotation.x)} ry:${f2(bp.rotation.y)} rz:${f2(bp.rotation.z)}\n` +
+            `pivot py:${f2(bp.position.y)} sy:${f2(bp.scale.y)}\n` : '') +
       `keys: ${pressed}`;
   } catch(err) {
     document.getElementById('dbg').textContent = 'HATA: ' + err.message;

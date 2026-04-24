@@ -1182,6 +1182,7 @@ async function preloadAll() {
 
         const charH = scaledBox.max.y - scaledBox.min.y;
         charMeta[ch.id] = { markerY: charH + 0.35, animations: gltf.animations || [] };
+        loadedModels[ch.id] = model;
 
         loaded++;
         if (bar) bar.style.width = (loaded / CHARACTERS.length * 100) + '%';

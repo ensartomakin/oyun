@@ -247,8 +247,8 @@
   <div class="sub">2 vs 2 &nbsp;·&nbsp; FAZ 4</div>
   <button id="btn-play" onclick="startFromMenu()">OYNA</button>
   <div class="controls">
-    ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA / GERİ &nbsp;|&nbsp; ↓ İLERİ<br>
-    ENTER ŞUT &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA
+    ← → HAREKET &nbsp;|&nbsp; ↑ GERİ &nbsp;|&nbsp; ↓ İLERİ &nbsp;|&nbsp; SPACE ZIPLA<br>
+    ENTER ŞUT &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA &nbsp;|&nbsp; V PAS
   </div>
 </div>
 
@@ -302,7 +302,7 @@
 <div id="dbg" style="display:none"></div>
 
 <div id="hint">
-  ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA &nbsp;|&nbsp; ↓ DERİNLİK &nbsp;|&nbsp; ENTER ŞUT &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA
+  ← → HAREKET &nbsp;|&nbsp; ↑ GERİ &nbsp;|&nbsp; ↓ İLERİ &nbsp;|&nbsp; SPACE ZIPLA &nbsp;|&nbsp; ENTER ŞUT &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA
 </div>
 <button id="btn-restart" onclick="restartMatch()">YENİDEN OYNA</button>
 
@@ -1426,14 +1426,14 @@ window.addEventListener('keydown', e => {
   const p = players[0];
 
   // !e.repeat: tuş basılı tutulunca tekrar tetiklenmesin
-  if (e.code === 'ArrowUp' && p.onGround && p.state !== 'slide' && !e.repeat) {
+  if (e.code === 'Space' && p.onGround && p.state !== 'slide' && !e.repeat) {
     p.vy = PLAYER_JUMP; p.onGround = false;
   }
   if (e.code === 'KeyX')  doBicycleKick(p);
   if (e.code === 'KeyZ')  doSlide(p);
   if (e.code === 'KeyC')  doHeader(p);
   if (e.code === 'Enter') doShot(p);
-  if (e.code === 'Space') doPass(p);
+  if (e.code === 'KeyV')  doPass(p);
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
@@ -1595,11 +1595,11 @@ function updateHuman(p, dt) {
   else                                        { p.vx *= Math.pow(0.001, dt); }
 
   // Derinlik — klavye ArrowUp/Down veya joystick Y ekseni
-  const jUp   = jy < -0.3 && p.onGround;
+  const jUp   = jy < -0.3;
   const jDown = jy >  0.3;
-  if      ((keys['ArrowUp'] && p.onGround) || jUp)   p.vz = -PLAYER_SPD * 0.65;
-  else if  (keys['ArrowDown'] || jDown)               p.vz =  PLAYER_SPD * 0.65;
-  else                                                 p.vz *= Math.pow(0.001, dt);
+  if      (keys['ArrowUp']   || jUp)    p.vz = -PLAYER_SPD * 0.65;
+  else if (keys['ArrowDown'] || jDown)  p.vz =  PLAYER_SPD * 0.65;
+  else                                   p.vz *= Math.pow(0.001, dt);
 }
 
 // ════════════════════════════════════════════════════════════════════

@@ -134,7 +134,82 @@
       letter-spacing: 0.1em; line-height: 2; text-align: center;
     }
 
-    /* ── GOL PARTİKELLERİ ── */
+    /* ── MOBİL KONTROLLER ── */
+    #portrait-warn {
+      display: none;
+      position: fixed; inset: 0; z-index: 400;
+      background: #050d1a;
+      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+    }
+    #portrait-warn p { color: #fff; font-size: 1rem; font-weight: 700; text-align: center;
+                       letter-spacing: 0.08em; }
+    @media (pointer: coarse) and (orientation: portrait) {
+      #portrait-warn { display: flex; }
+    }
+
+    #mobile-controls {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0; height: 200px;
+      z-index: 50; pointer-events: none;
+    }
+    @media (pointer: coarse) {
+      #mobile-controls { display: block; }
+      #hint { display: none; }
+    }
+
+    /* Joystick */
+    #joy-base {
+      position: absolute; bottom: 24px; left: 24px;
+      width: 120px; height: 120px; border-radius: 50%;
+      background: rgba(255,255,255,0.10);
+      border: 2px solid rgba(255,255,255,0.22);
+      pointer-events: auto; touch-action: none;
+    }
+    #joy-knob {
+      position: absolute; width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(255,255,255,0.50);
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      pointer-events: none;
+    }
+
+    /* Aksiyon tuşları */
+    #act-btns {
+      position: absolute; bottom: 20px; right: 18px;
+      display: grid;
+      grid-template-columns: 56px 56px 68px;
+      grid-template-rows: 56px 56px;
+      gap: 9px;
+      pointer-events: auto;
+    }
+    .act-btn {
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.28);
+      background: rgba(30,30,60,0.75);
+      color: #fff; font-weight: 800; font-size: 0.52rem;
+      letter-spacing: 0.05em; line-height: 1.25;
+      display: flex; align-items: center; justify-content: center; text-align: center;
+      cursor: pointer; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      transition: background 0.07s, transform 0.07s;
+    }
+    .act-btn:active, .act-btn.pressed {
+      background: rgba(80,120,255,0.55); transform: scale(0.91);
+    }
+    #btn-m-jump   { grid-column: 1; grid-row: 1; }
+    #btn-m-header { grid-column: 2; grid-row: 1; }
+    #btn-m-bicycle{ grid-column: 1; grid-row: 2; }
+    #btn-m-slide  { grid-column: 2; grid-row: 2; }
+    #btn-m-pass   { grid-column: 3; grid-row: 1; border-color: rgba(100,200,100,0.5); }
+    #btn-m-shoot  {
+      grid-column: 3; grid-row: 2;
+      width: 68px; height: 68px;
+      background: rgba(34,85,255,0.60);
+      border-color: rgba(100,150,255,0.65);
+      font-size: 0.68rem;
+    }
+    #btn-m-shoot:active, #btn-m-shoot.pressed { background: rgba(34,85,255,0.9); }
     @keyframes confetti {
       0%   { transform: translateY(0) rotate(0deg);   opacity:1; }
       100% { transform: translateY(120px) rotate(720deg); opacity:0; }
@@ -175,6 +250,27 @@
   <div class="controls">
     ← → HAREKET &nbsp;|&nbsp; ↑ ZIPLA / GERİ &nbsp;|&nbsp; ↓ İLERİ<br>
     ENTER ŞUT &nbsp;|&nbsp; X RÖVEŞATA &nbsp;|&nbsp; Z KAYMA &nbsp;|&nbsp; C KAFA
+  </div>
+</div>
+
+<!-- Dikey ekran uyarısı -->
+<div id="portrait-warn">
+  <div style="font-size:3rem">📱↔️</div>
+  <p>TELEFONU YATAY ÇEVİR</p>
+</div>
+
+<!-- Mobil kontroller -->
+<div id="mobile-controls">
+  <div id="joy-base">
+    <div id="joy-knob"></div>
+  </div>
+  <div id="act-btns">
+    <button class="act-btn" id="btn-m-jump"    ontouchstart="mAct('jump',this)"    ontouchend="mEnd(this)">⬆<br>ZIPLA</button>
+    <button class="act-btn" id="btn-m-header"  ontouchstart="mAct('header',this)"  ontouchend="mEnd(this)">KAFA</button>
+    <button class="act-btn" id="btn-m-bicycle" ontouchstart="mAct('bicycle',this)" ontouchend="mEnd(this)">RÖVE<br>ŞATA</button>
+    <button class="act-btn" id="btn-m-slide"   ontouchstart="mAct('slide',this)"   ontouchend="mEnd(this)">KAYMA</button>
+    <button class="act-btn" id="btn-m-pass"    ontouchstart="mAct('pass',this)"    ontouchend="mEnd(this)">PAS</button>
+    <button class="act-btn" id="btn-m-shoot"   ontouchstart="mAct('shoot',this)"   ontouchend="mEnd(this)">ŞUT</button>
   </div>
 </div>
 
@@ -1209,6 +1305,74 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
+// ════════════════════════════════════════════════════════════════════
+//  MOBİL DOKUNMA KONTROLLERİ
+// ════════════════════════════════════════════════════════════════════
+
+const joyState = { active: false, dx: 0, dy: 0 };
+let   joyTouchId = null;
+
+const joyBase = document.getElementById('joy-base');
+const joyKnob = document.getElementById('joy-knob');
+const JOY_R   = 48; // maksimum knob yarıçapı (piksel)
+
+function _joyUpdate(cx, cy) {
+  const rect = joyBase.getBoundingClientRect();
+  const bx   = rect.left + rect.width  / 2;
+  const by   = rect.top  + rect.height / 2;
+  let dx = cx - bx, dy = cy - by;
+  const d = Math.sqrt(dx*dx + dy*dy);
+  if (d > JOY_R) { dx *= JOY_R/d; dy *= JOY_R/d; }
+  joyState.dx = dx / JOY_R;
+  joyState.dy = dy / JOY_R;
+  joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+}
+function _joyReset() {
+  joyTouchId = null; joyState.active = false;
+  joyState.dx = 0; joyState.dy = 0;
+  joyKnob.style.transform = 'translate(-50%,-50%)';
+}
+
+if (joyBase) {
+  joyBase.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (joyTouchId !== null) return;
+    const t = e.changedTouches[0];
+    joyTouchId = t.identifier; joyState.active = true;
+    _joyUpdate(t.clientX, t.clientY);
+  }, { passive: false });
+
+  joyBase.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches)
+      if (t.identifier === joyTouchId) _joyUpdate(t.clientX, t.clientY);
+  }, { passive: false });
+
+  joyBase.addEventListener('touchend', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches)
+      if (t.identifier === joyTouchId) _joyReset();
+  }, { passive: false });
+
+  joyBase.addEventListener('touchcancel', _joyReset, { passive: false });
+}
+
+// Aksiyon tuşu — dokunma
+window.mAct = function(action, el) {
+  el && el.classList.add('pressed');
+  if (!matchActive) return;
+  const p = players[0];
+  switch (action) {
+    case 'jump':    if (p.onGround && p.state !== 'slide') { p.vy = PLAYER_JUMP; p.onGround = false; } break;
+    case 'shoot':   doShot(p);         break;
+    case 'pass':    doPass(p);         break;
+    case 'bicycle': doBicycleKick(p);  break;
+    case 'slide':   doSlide(p);        break;
+    case 'header':  doHeader(p);       break;
+  }
+};
+window.mEnd = function(el) { el && el.classList.remove('pressed'); };
+
 // ── YARDIMCI: topa mesafe ────────────────────────────────────────────
 function ballDist(p) {
   const dx = ball.x - p.x;
@@ -1290,15 +1454,20 @@ function doPass(p) {
 function updateHuman(p, dt) {
   if (p.state === 'slide') return;
 
-  // Sol / Sağ
-  if      (keys['ArrowLeft'])  { p.vx = -PLAYER_SPD; p.faceLeft = true;  }
-  else if (keys['ArrowRight']) { p.vx =  PLAYER_SPD; p.faceLeft = false; }
-  else                          { p.vx *= Math.pow(0.001, dt); } // dt-tabanlı anlık dur
+  const jx = joyState.active ? joyState.dx : 0;
+  const jy = joyState.active ? joyState.dy : 0;
 
-  // Derinlik — yerde iken ArrowUp uzaklaşır, ArrowDown yaklaşır
-  if      (keys['ArrowUp']   && p.onGround) p.vz = -PLAYER_SPD * 0.65;
-  else if (keys['ArrowDown'])               p.vz =  PLAYER_SPD * 0.65;
-  else                                       p.vz *= Math.pow(0.001, dt);
+  // Sol / Sağ  (klavye veya joystick)
+  if      (keys['ArrowLeft']  || jx < -0.2) { p.vx = -PLAYER_SPD; p.faceLeft = true;  }
+  else if (keys['ArrowRight'] || jx >  0.2) { p.vx =  PLAYER_SPD; p.faceLeft = false; }
+  else                                        { p.vx *= Math.pow(0.001, dt); }
+
+  // Derinlik — klavye ArrowUp/Down veya joystick Y ekseni
+  const jUp   = jy < -0.3 && p.onGround;
+  const jDown = jy >  0.3;
+  if      ((keys['ArrowUp'] && p.onGround) || jUp)   p.vz = -PLAYER_SPD * 0.65;
+  else if  (keys['ArrowDown'] || jDown)               p.vz =  PLAYER_SPD * 0.65;
+  else                                                 p.vz *= Math.pow(0.001, dt);
 }
 
 // ════════════════════════════════════════════════════════════════════

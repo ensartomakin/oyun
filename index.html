@@ -348,12 +348,12 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 renderer.outputEncoding    = THREE.sRGBEncoding;
 renderer.toneMapping       = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.5;
 
 // ── SAHNE ───────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b1a2e);
-scene.fog = new THREE.FogExp2(0x0b1a2e, 0.009);
+scene.background = new THREE.Color(0x0d2040);
+scene.fog = new THREE.FogExp2(0x0d2040, 0.007);
 
 // ── KAMERA ──────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(
@@ -364,24 +364,34 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 7, 15);
 camera.lookAt(0, 1.5, 0);
 
+function setCameraForViewport() {
+  const mobile = window.innerWidth < 900 || window.matchMedia('(pointer: coarse)').matches;
+  if (mobile) {
+    camera.position.set(0, 5, 10);
+    camera.fov = 72;
+  } else {
+    camera.position.set(0, 7, 15);
+    camera.fov = 62;
+  }
+  camera.lookAt(0, 1.5, 0);
+  camera.updateProjectionMatrix();
+}
+setCameraForViewport();
+
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  setCameraForViewport();
 });
-
-// Sabit oyun kamerası — saha görünür açı
-camera.position.set(0, 7, 15);
-camera.lookAt(0, 1.5, 0);
 
 // ── IŞIKLAR ─────────────────────────────────────────────────────────
 
 // Ortam ışığı (gökyüzü mavi tonu, zemin yeşil tonu)
-const hemi = new THREE.HemisphereLight(0xbbddaa, 0x224422, 0.35);
+const hemi = new THREE.HemisphereLight(0xcceecc, 0x335533, 0.55);
 scene.add(hemi);
 
 // Ana güneş ışığı — gölgeli
-const sun = new THREE.DirectionalLight(0xfff5e0, 1.1);
+const sun = new THREE.DirectionalLight(0xfff8e8, 1.6);
 sun.position.set(8, 18, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -395,19 +405,19 @@ sun.shadow.bias          = -0.0008;
 scene.add(sun);
 
 // Doldurma ışığı (sol + hafif soğuk)
-const fill = new THREE.DirectionalLight(0x7799cc, 0.38);
+const fill = new THREE.DirectionalLight(0x88bbff, 0.55);
 fill.position.set(-8, 8, 4);
 scene.add(fill);
 
 // Arka kenar ışığı (rim)
-const rim = new THREE.DirectionalLight(0xffeedd, 0.20);
+const rim = new THREE.DirectionalLight(0xffeedd, 0.35);
 rim.position.set(0, 4, -10);
 scene.add(rim);
 
 // ── SAHA ────────────────────────────────────────────────────────────
 
 // Çim zemin
-const turfMat = new THREE.MeshLambertMaterial({ color: 0x2e9e38 });
+const turfMat = new THREE.MeshLambertMaterial({ color: 0x22cc44 });
 const turf = new THREE.Mesh(
   new THREE.BoxGeometry(FIELD_W, 0.22, FIELD_D),
   turfMat
@@ -1302,7 +1312,7 @@ function createPlayers() {
       state: 'idle', stateTimer: 0,
       mesh: group, bodyPivot, legPivot, bones,
       mixer, mixerActions,
-      animTime: 0, landTimer: 0,
+      animTime: 0, landTimer: 0, celebrateTimer: 0,
       shadow: shad,
       spawnX: sp.x, spawnZ: sp.z
     };
@@ -1351,6 +1361,26 @@ function animatePlayerMesh(p, dt) {
       bone.rotation.x = lerp(bone.rotation.x, bone._ir.x, 0.12);
     };
     ['lArm','rArm','lLeg','rLeg'].forEach(k => rb(p.bones[k]));
+  }
+
+  // ── Gol sevinci dansı ───────────────────────────────────────────
+  if (p.celebrateTimer > 0) {
+    p.celebrateTimer -= dt;
+    const ct = p.celebrateTimer;
+    const spin   = ct * 6.0;
+    const bounce = Math.abs(Math.sin(ct * 8.0)) * 0.55;
+    const squash = 1 + Math.abs(Math.sin(ct * 8.0)) * 0.22;
+    pivot.rotation.y = spin;
+    pivot.position.y = bounce;
+    pivot.scale.y = squash;
+    pivot.scale.x = 1 / Math.sqrt(squash);
+    pivot.scale.z = 1 / Math.sqrt(squash);
+    if (p.celebrateTimer <= 0) {
+      pivot.rotation.set(0, 0, 0);
+      pivot.position.set(0, 0, 0);
+      pivot.scale.set(1, 1, 1);
+    }
+    return;
   }
 
   // ── Gövde pivot animasyonları ────────────────────────────────────
@@ -1404,7 +1434,7 @@ function spawnPlayers() {
     p.vx = 0; p.vy = 0; p.vz = 0;
     p.onGround = true; p.kickCooldown = 0;
     p.state = 'idle'; p.stateTimer = 0;
-    p.animTime = 0; p.landTimer = 0;
+    p.animTime = 0; p.landTimer = 0; p.celebrateTimer = 0;
     p.mesh.rotation.set(0, 0, 0);
     if (p.bodyPivot) {
       p.bodyPivot.rotation.set(0, 0, 0);
@@ -1835,6 +1865,11 @@ function onGoal(scoringTeam) {
   matchActive = false;
   score[scoringTeam]++;
   (scoringTeam === 0 ? elScoreA : elScoreB).textContent = score[scoringTeam];
+
+  // Gol atan takımın oyuncuları dans etsin
+  players.forEach(p => {
+    if (p.team === scoringTeam) p.celebrateTimer = 3.0;
+  });
 
   elGoalMsg.style.display = 'block';
   elGoalMsg.style.animation = 'none';

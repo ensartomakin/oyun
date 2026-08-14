@@ -333,11 +333,16 @@
 // ═══════════════════════════════════════════════════════════════════
 
 // ── SABİTLER ────────────────────────────────────────────────────────
-const FIELD_W  = 22;   // saha genişliği (x: -11 … +11)
-const FIELD_D  = 10;   // saha derinliği (z: -5 … +5)
+const FIELD_W  = 30;   // saha genişliği (x: -15 … +15)
+const FIELD_D  = 14;   // saha derinliği (z: -7 … +7)
 const GOAL_H   = 2.7;  // kale yüksekliği
 const GOAL_W   = 3.6;  // kale ağzı genişliği (z ekseni)
 const GOAL_D   = 1.2;  // kale derinliği (x ekseni)
+
+// Referans tasarım (22×10) boyutuna göre ölçek — kamera, gölge ve tribün
+// yerleşimlerini yeni saha boyutuna orantılı taşımak için kullanılır.
+const SCALE_W = FIELD_W / 22;
+const SCALE_D = FIELD_D / 10;
 
 // ── RENDERER ────────────────────────────────────────────────────────
 const canvas   = document.getElementById('c');
@@ -353,7 +358,7 @@ renderer.toneMappingExposure = 1.5;
 // ── SAHNE ───────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d2040);
-scene.fog = new THREE.FogExp2(0x0d2040, 0.007);
+scene.fog = new THREE.FogExp2(0x0d2040, 0.007 / SCALE_W);
 
 // ── KAMERA ──────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(
@@ -367,10 +372,10 @@ camera.lookAt(0, 1.5, 0);
 function setCameraForViewport() {
   const mobile = window.innerWidth < 900 || window.matchMedia('(pointer: coarse)').matches;
   if (mobile) {
-    camera.position.set(0, 5, 10);
+    camera.position.set(0, 5 * SCALE_W, 10 * SCALE_W);
     camera.fov = 72;
   } else {
-    camera.position.set(0, 7, 15);
+    camera.position.set(0, 7 * SCALE_W, 15 * SCALE_W);
     camera.fov = 62;
   }
   camera.lookAt(0, 1.5, 0);
@@ -397,10 +402,10 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near   = 0.5;
 sun.shadow.camera.far    = 60;
-sun.shadow.camera.left   = -18;
-sun.shadow.camera.right  =  18;
-sun.shadow.camera.top    =  14;
-sun.shadow.camera.bottom = -6;
+sun.shadow.camera.left   = -(FIELD_W / 2 + 7);
+sun.shadow.camera.right  =  (FIELD_W / 2 + 7);
+sun.shadow.camera.top    =  (FIELD_D / 2 + 9);
+sun.shadow.camera.bottom = -(FIELD_D / 2 + 1);
 sun.shadow.bias          = -0.0008;
 scene.add(sun);
 
@@ -427,14 +432,16 @@ turf.receiveShadow = true;
 scene.add(turf);
 
 // Koyu/açık yeşil çim şeritleri (gerçek saha etkisi)
-const darkTurf = new THREE.MeshLambertMaterial({ color: 0x248830 });
-for (let i = 0; i < 11; i++) {
+const darkTurf   = new THREE.MeshLambertMaterial({ color: 0x248830 });
+const STRIPE_W   = 2.0;
+const stripeCount = Math.ceil(FIELD_W / STRIPE_W);
+for (let i = 0; i < stripeCount; i++) {
   if (i % 2 === 0) {
     const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(2.0, 0.01, FIELD_D),
+      new THREE.BoxGeometry(STRIPE_W, 0.01, FIELD_D),
       darkTurf
     );
-    stripe.position.set(-10 + i * 2 + 1, 0.005, 0);
+    stripe.position.set(-FIELD_W / 2 + i * STRIPE_W + STRIPE_W / 2, 0.005, 0);
     scene.add(stripe);
   }
 }
@@ -703,7 +710,8 @@ function buildStands() {
     scene.add(rowMesh);
 
     // Taraftarlar
-    for (let col = -9; col <= 9; col++) {
+    const longColRange = Math.round(9 * SCALE_W);
+    for (let col = -longColRange; col <= longColRange; col++) {
       if (rand() > 0.25) {
         const isBlue  = col < 0;
         const palette = isBlue ? blueShades : redShades;
@@ -764,7 +772,8 @@ function buildStands() {
       scene.add(endMesh);
 
       // Taraftarlar kale arkasında
-      for (let col = -3; col <= 3; col++) {
+      const endColRange = Math.round(3 * SCALE_D);
+      for (let col = -endColRange; col <= endColRange; col++) {
         if (rand() > 0.3) {
           const fan = makeFan(palette[Math.floor(rand() * palette.length)]);
           fan.position.set(x, y + 0.5, col * 1.3 + (rand()-0.5)*0.4);
@@ -1089,6 +1098,37 @@ function makePlayerMesh(teamColor) {
   return g;
 }
 
+// ── KAYMA MÜDAHALESİ — uzanan tek bacak ──────────────────────────────
+// GLB modellerimiz tek parça (rigsiz) olduğundan karakterin kendi
+// bacağını oynatamıyoruz. Bunun yerine kayma sırasında öne uzanan ayrı
+// bir bacak parçası (uyluk+incik+bot) ekleyip kalçadan öne doğru
+// döndürerek gerçek bir "tek ayakla müdahale" pozu oluşturuyoruz.
+function makeSlideLegProp() {
+  const hip = new THREE.Group();
+  const legMat  = new THREE.MeshPhongMaterial({ color: 0x1c2340, shininess: 25 });
+  const bootMat = new THREE.MeshPhongMaterial({ color: 0x141414, shininess: 20 });
+
+  const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.095, 0.40, 10), legMat);
+  thigh.rotation.x = Math.PI / 2;
+  thigh.position.z = 0.20;
+  thigh.castShadow = true;
+  hip.add(thigh);
+
+  const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.07, 0.38, 10), legMat);
+  shin.rotation.x = Math.PI / 2;
+  shin.position.z = 0.58;
+  shin.castShadow = true;
+  hip.add(shin);
+
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.13, 0.27), bootMat);
+  boot.position.z = 0.84;
+  boot.castShadow = true;
+  hip.add(boot);
+
+  hip.visible = false;
+  return hip;
+}
+
 // Oyuncu zemin gölgesi
 function makePlayerShadow() {
   const m = new THREE.Mesh(
@@ -1224,12 +1264,12 @@ function makeTeamMarker(teamColor) {
 // ── OYUNCU DURUMU ────────────────────────────────────────────────────
 const TEAM_COLORS = [0x2255FF, 0xFF2211];
 
-// Başlangıç konumları — 1v1
+// Başlangıç konumları — 1v1 (referans 22×10 sahaya göre, yeni boyuta ölçeklenir)
 const SPAWN = [
-  { x: -3.5, z:  0.7 }, // Mavi  0 — İnsan (forvet)
-  { x: -6.5, z: -0.7 }, // Mavi  1 — YZ    (defans)
-  { x:  3.5, z:  0.7 }, // Kırmızı 2 — YZ  (forvet)
-  { x:  6.5, z: -0.7 }, // Kırmızı 3 — YZ  (defans)
+  { x: -3.5 * SCALE_W, z:  0.7 * SCALE_D }, // Mavi  0 — İnsan (forvet)
+  { x: -6.5 * SCALE_W, z: -0.7 * SCALE_D }, // Mavi  1 — YZ    (defans)
+  { x:  3.5 * SCALE_W, z:  0.7 * SCALE_D }, // Kırmızı 2 — YZ  (forvet)
+  { x:  6.5 * SCALE_W, z: -0.7 * SCALE_D }, // Kırmızı 3 — YZ  (defans)
 ];
 
 let players = [];
@@ -1297,6 +1337,11 @@ function createPlayers() {
     marker.position.y = meta?.markerY ?? 2.0;
     group.add(marker);
 
+    // Kayma müdahalesi bacağı (kalça hizasında, öne uzanır)
+    const slideLeg = makeSlideLegProp();
+    slideLeg.position.set(0, 0.5, 0.08);
+    group.add(slideLeg);
+
     group.position.set(sp.x, 0, sp.z);
     scene.add(group);
 
@@ -1310,7 +1355,7 @@ function createPlayers() {
       kickCooldown: 0,
       faceLeft: team === 1,
       state: 'idle', stateTimer: 0,
-      mesh: group, bodyPivot, legPivot, bones,
+      mesh: group, bodyPivot, legPivot, bones, slideLeg,
       mixer, mixerActions,
       animTime: 0, landTimer: 0, celebrateTimer: 0,
       shadow: shad,
@@ -1343,8 +1388,37 @@ function animatePlayerMesh(p, dt) {
     else if (idle)                { if (!idle.isRunning()) { idle.reset().play(); walk?.stop(); } }
   }
 
-  // ── Kemik animasyonu (rigged modelde) ───────────────────────────
+  // ── Kayma müdahalesi — tek bacak öne uzansın ─────────────────────
+  // GLB modellerimiz rigsiz (tek parça mesh) olduğundan karakterin kendi
+  // bacağını oynatamıyoruz; bunun yerine ayrı bir bacak parçasını kalçadan
+  // öne doğru döndürüp topa doğru uzatarak gerçek bir müdahale pozu
+  // oluşturuyoruz. Rigli bir model eklenirse bacak kemikleri de ayrıca
+  // hareket eder.
   const hasBones = Object.keys(p.bones).length > 0;
+  if (p.slideLeg) p.slideLeg.visible = (p.state === 'slide');
+  if (p.state === 'slide') {
+    if (p.slideLeg) {
+      const elapsed = 0.60 - Math.max(p.stateTimer, 0);
+      const swing   = Math.min(elapsed / 0.18, 1);
+      const eased   = 1 - Math.pow(1 - swing, 3); // ease-out: dizden bükülüden düz uzanmaya
+      p.slideLeg.rotation.x = -0.9 * (1 - eased);
+    }
+
+    if (hasBones) {
+      const kickFreq = t * 6;
+      const ab = (bone, axis, amp, phase) => {
+        if (!bone?._ir) return;
+        bone.rotation[axis] = bone._ir[axis] + Math.sin(kickFreq + phase) * amp;
+      };
+      ab(p.bones.lLeg, 'x', 0.85, 0);
+      ab(p.bones.rLeg, 'x', 0.85, Math.PI);
+      ab(p.bones.lArm, 'x', 0.4,  Math.PI);
+      ab(p.bones.rArm, 'x', 0.4,  0);
+    }
+    return;
+  }
+
+  // ── Kemik animasyonu (rigged modelde) ───────────────────────────
   if (hasBones && moving && p.onGround && p.state === 'idle') {
     const swing = ratio * 0.7;
     const ab = (bone, axis, amp, phase) => {
@@ -1784,7 +1858,9 @@ function updatePlayer(p, dt) {
   const lerp = (a, b, t) => a + (b - a) * t;
   if (p.state === 'slide') {
     p.mesh.rotation.x = lerp(p.mesh.rotation.x, 1.35, 0.28);
-    p.mesh.rotation.z = 0;
+    // Öne uzanan bacağın karşı tarafına, tek kalça üstünde kayıyormuş gibi sabit bir yatış
+    const sideLean = p.faceLeft ? -0.22 : 0.22;
+    p.mesh.rotation.z = lerp(p.mesh.rotation.z, sideLean, 0.3);
   } else if (p.state === 'bicycle') {
     p.mesh.rotation.z += 5.0 * dt * (p.faceLeft ? -1 : 1);
     p.mesh.rotation.x = lerp(p.mesh.rotation.x, -0.65, 0.18);
